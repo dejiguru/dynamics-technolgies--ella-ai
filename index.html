@@ -8,8 +8,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
         :root {
             --primary-color: #FF5722;
@@ -75,6 +79,13 @@
             background: #34C759;
             box-shadow: 0 0 12px rgba(52,199,89,0.6);
         }
+        .icon {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
         .main-content {
             width: 100%;
             max-width: 800px;
@@ -114,13 +125,6 @@
             color: var(--text-muted);
             margin-left: 2px;
         }
-        .icon {
-            width: 24px;
-            height: 24px;
-            stroke: currentColor;
-            stroke-width: 2;
-            fill: none;
-        }
         .card-icon-wrapper {
             position: absolute;
             bottom: 12px;
@@ -132,6 +136,26 @@
             justify-content: center;
             border-radius: 50%;
             background: var(--bg-color);
+        }
+        /* Chart container styles */
+        .chart-container {
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 15px;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
         }
     </style>
 </head>
@@ -154,71 +178,114 @@
     <header class="app-header">E.L.L.A <span>CLOUD</span></header>
 
     <div class="main-content">
-        <div class="sensor-grid">
-            <!-- Heart Rate -->
-            <div class="sensor-card">
-                <div class="card-label">Heart Rate</div>
-                <div><span class="card-value" id="hrVal">--</span><span class="card-unit">BPM</span></div>
-                <div class="card-icon-wrapper">
-                    <svg class="icon" viewBox="0 0 24 24" style="color: var(--heart-color);">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                    </svg>
+        <!-- Dashboard Tab -->
+        <div class="tab-content active" id="tab-dashboard">
+            <div class="sensor-grid">
+                <!-- Heart Rate -->
+                <div class="sensor-card">
+                    <div class="card-label">Heart Rate</div>
+                    <div><span class="card-value" id="hrVal">--</span><span class="card-unit">BPM</span></div>
+                    <div class="card-icon-wrapper">
+                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--heart-color);">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <!-- SpO2 -->
+                <div class="sensor-card">
+                    <div class="card-label">O2 Saturation</div>
+                    <div><span class="card-value" id="spo2Val">--</span><span class="card-unit">%</span></div>
+                    <div class="card-icon-wrapper">
+                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--oxy-color);">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <!-- Body Temp -->
+                <div class="sensor-card">
+                    <div class="card-label">Body Temp</div>
+                    <div><span class="card-value" id="bodyTempVal">--</span><span class="card-unit">°C</span></div>
+                    <div class="card-icon-wrapper">
+                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--temp-color);">
+                            <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <!-- Env Temp -->
+                <div class="sensor-card">
+                    <div class="card-label">Environment</div>
+                    <div><span class="card-value" id="envTempVal">--</span><span class="card-unit">°C</span></div>
+                    <div class="card-icon-wrapper">
+                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--env-color);">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                        </svg>
+                    </div>
+                </div>
+                <!-- Humidity -->
+                <div class="sensor-card">
+                    <div class="card-label">Humidity</div>
+                    <div><span class="card-value" id="humidityVal">--</span><span class="card-unit">%</span></div>
+                    <div class="card-icon-wrapper">
+                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--oxy-color);">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <!-- AQI -->
+                <div class="sensor-card">
+                    <div class="card-label">AQI</div>
+                    <div><span class="card-value" id="aqiVal">--</span><span class="card-unit">Score</span></div>
+                    <div class="card-icon-wrapper">
+                        <svg class="icon" viewBox="0 0 24 24" style="color:#9C27B0;">
+                            <path d="M8 16.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM14 6.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM21.5 10a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <!-- eCO2 -->
+                <div class="sensor-card">
+                    <div class="card-label">eCO2</div>
+                    <div><span class="card-value" id="eco2Val">--</span><span class="card-unit">ppm</span></div>
+                    <div class="card-icon-wrapper">
+                        <svg class="icon" viewBox="0 0 24 24" style="color:#4CAF50;">
+                            <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"></path>
+                            <path d="M11 7h2v10h-2zm-4 4h2v2H7zm8 0h2v2h-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <!-- TVOC -->
+                <div class="sensor-card">
+                    <div class="card-label">TVOC</div>
+                    <div><span class="card-value" id="tvocVal">--</span><span class="card-unit">ppb</span></div>
+                    <div class="card-icon-wrapper">
+                        <svg class="icon" viewBox="0 0 24 24" style="color:#FF9800;">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                        </svg>
+                    </div>
                 </div>
             </div>
-            <!-- SpO2 -->
-            <div class="sensor-card">
-                <div class="card-label">O2 Saturation</div>
-                <div><span class="card-value" id="spo2Val">--</span><span class="card-unit">%</span></div>
-                <div class="card-icon-wrapper">
-                    <svg class="icon" viewBox="0 0 24 24" style="color: var(--oxy-color);">
-                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
-                    </svg>
-                </div>
+            <div class="last-update" style="text-align:center; margin-top:10px; color:var(--text-muted);">
+                Last update: <span id="lastUpdate">--</span>
             </div>
-            <!-- Body Temp -->
-            <div class="sensor-card">
-                <div class="card-label">Body Temp</div>
-                <div><span class="card-value" id="bodyTempVal">--</span><span class="card-unit">°C</span></div>
-                <div class="card-icon-wrapper">
-                    <svg class="icon" viewBox="0 0 24 24" style="color: var(--temp-color);">
-                        <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
-                    </svg>
+        </div>
+
+        <div class="tab-content" id="tab-history">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <span style="color: var(--heart-color);">Heart Rate</span>
+                    <span id="hrCurrent">--</span>
                 </div>
-            </div>
-            <!-- Env Temp -->
-            <div class="sensor-card">
-                <div class="card-label">Environment</div>
-                <div><span class="card-value" id="envTempVal">--</span><span class="card-unit">°C</span></div>
-                <div class="card-icon-wrapper">
-                    <svg class="icon" viewBox="0 0 24 24" style="color: var(--env-color);">
-                        <circle cx="12" cy="12" r="5"></circle>
-                        <line x1="12" y1="1" x2="12" y2="3"></line>
-                    </svg>
-                </div>
-            </div>
-            <!-- Humidity -->
-            <div class="sensor-card">
-                <div class="card-label">Humidity</div>
-                <div><span class="card-value" id="humidityVal">--</span><span class="card-unit">%</span></div>
-                <div class="card-icon-wrapper">
-                    <svg class="icon" viewBox="0 0 24 24" style="color: var(--oxy-color);">
-                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
-                    </svg>
-                </div>
-            </div>
-            <!-- AQI placeholder -->
-            <div class="sensor-card">
-                <div class="card-label">AQI</div>
-                <div><span class="card-value" id="aqiVal">--</span><span class="card-unit">Score</span></div>
-                <div class="card-icon-wrapper">
-                    <svg class="icon" viewBox="0 0 24 24" style="color:#9C27B0;">
-                        <path d="M8 16.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM14 6.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM21.5 10a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"></path>
-                    </svg>
+                <div style="height:160px;">
+                    <canvas id="hrChartCanvas"></canvas>
                 </div>
             </div>
         </div>
-        <div class="last-update" style="text-align:center; margin-top:10px; color:var(--text-muted);">
-            Last update: <span id="lastUpdate">--</span>
+
+        <!-- Reminders Tab (placeholder) -->
+        <div class="tab-content" id="tab-reminders">
+            <div style="background:var(--card-bg); border-radius:20px; padding:20px; text-align:center; color:var(--text-muted);">
+                Reminders coming soon...
+            </div>
         </div>
     </div>
 
@@ -227,102 +294,13 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
+        // Connection status
         const statusEl = document.getElementById('status');
         database.ref('.info/connected').on('value', (snap) => {
             statusEl.classList.toggle('status-connected', snap.val());
         });
 
-        // Theme toggle
-        const themeToggle = document.getElementById('themeToggle');
-        const body = document.body;
-        let darkMode = localStorage.getItem('darkMode') !== 'false';
-        function setTheme(mode) { body.classList.toggle('dark-mode', mode); localStorage.setItem('darkMode', mode); }
-        themeToggle.addEventListener('click', () => { darkMode = !darkMode; setTheme(darkMode); });
-        setTheme(darkMode);
-  
-     <script>
-        const firebaseConfig = { databaseURL: "https://ella-b927d-default-rtdb.firebaseio.com/" };
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
-        const statusEl = document.getElementById('status');
-        database.ref('.info/connected').on('value', (snap) => {
-            statusEl.classList.toggle('status-connected', snap.val());
-        });
-
-        // DOM elements
-        const hrVal = document.getElementById('hrVal');
-        const spo2Val = document.getElementById('spo2Val');
-        const bodyTempVal = document.getElementById('bodyTempVal');
-        const envTempVal = document.getElementById('envTempVal');
-        const humidityVal = document.getElementById('humidityVal');
-        const aqiVal = document.getElementById('aqiVal');
-        const lastUpdate = document.getElementById('lastUpdate');
-
-        // 🔴 BUG: Wrong path – should be 'readings' but using 'sensors'
-        database.ref('sensors').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
-            const data = snap.val();
-            if (!data) return;
-
-            hrVal.textContent = data.heartRate || '--';
-            spo2Val.textContent = data.spo2 || '--';
-            bodyTempVal.textContent = data.bodyTemp ? data.bodyTemp.toFixed(1) : '--';
-            envTempVal.textContent = data.temperature ? data.temperature.toFixed(1) : '--';
-            humidityVal.textContent = data.humidity ? Math.round(data.humidity) : '--';
-            aqiVal.textContent = data.aqi || '--';
-
-            if (data.timestamp) {
-                lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
-            }
-        });
-
-        // Theme toggle (unchanged)
-        const themeToggle = document.getElementById('themeToggle');
-        const body = document.body;
-        let darkMode = localStorage.getItem('darkMode') !== 'false';
-        function setTheme(mode) { body.classList.toggle('dark-mode', mode); localStorage.setItem('darkMode', mode); }
-        themeToggle.addEventListener('click', () => { darkMode = !darkMode; setTheme(darkMode); });
-        setTheme(darkMode);
-   </head>
-<body class="dark-mode">
-    <div class="main-content">
-        <div class="sensor-grid">
-            <!-- existing 6 cards ... -->
-            <!-- eCO2 -->
-            <div class="sensor-card">
-                <div class="card-label">eCO2</div>
-                <div><span class="card-value" id="eco2Val">--</span><span class="card-unit">ppm</span></div>
-                <div class="card-icon-wrapper">
-                    <svg class="icon" viewBox="0 0 24 24" style="color:#4CAF50;">
-                        <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"></path>
-                        <path d="M11 7h2v10h-2zm-4 4h2v2H7zm8 0h2v2h-2z"></path>
-                    </svg>
-                </div>
-            </div>
-            <!-- TVOC -->
-            <div class="sensor-card">
-                <div class="card-label">TVOC</div>
-                <div><span class="card-value" id="tvocVal">--</span><span class="card-unit">ppb</span></div>
-                <div class="card-icon-wrapper">
-                    <svg class="icon" viewBox="0 0 24 24" style="color:#FF9800;">
-                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
-                    </svg>
-                </div>
-            </div>
-        </div>
-        ...
-    </div>
-
-    <script>
-        const firebaseConfig = { databaseURL: "https://ella-b927d-default-rtdb.firebaseio.com/" };
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
-        const statusEl = document.getElementById('status');
-        database.ref('.info/connected').on('value', (snap) => {
-            statusEl.classList.toggle('status-connected', snap.val());
-        });
-
+        // DOM elements for values
         const hrVal = document.getElementById('hrVal');
         const spo2Val = document.getElementById('spo2Val');
         const bodyTempVal = document.getElementById('bodyTempVal');
@@ -332,6 +310,37 @@
         const eco2Val = document.getElementById('eco2Val');
         const tvocVal = document.getElementById('tvocVal');
         const lastUpdate = document.getElementById('lastUpdate');
+
+        // Chart variables
+        let hrChart;
+
+        // Chart initialization (buggy – using wrong canvas ID)
+        function initCharts() {
+            const ctx = document.getElementById('hrChart').getContext('2d');
+            hrChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'BPM',
+                        data: [],
+                        borderColor: '#FF2D55',
+                        backgroundColor: 'rgba(255,45,85,0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { type: 'time', time: { unit: 'minute' } },
+                        y: { min: 40, max: 160 }
+                    }
+                }
+            });
+        }
+        initCharts();
+
+        // Update dashboard with new data
         database.ref('readings').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
             const data = snap.val();
             if (!data) return;
@@ -348,9 +357,19 @@
             if (data.timestamp) {
                 lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
             }
+
+            // Update chart header
+            document.getElementById('hrCurrent').textContent = (data.heartRate || '--') + ' BPM';
+
+            // Push to chart
+            if (hrChart && data.heartRate && data.timestamp) {
+                hrChart.data.datasets[0].data.push({ x: data.timestamp, y: data.heartRate });
+                if (hrChart.data.datasets[0].data.length > 50) hrChart.data.datasets[0].data.shift();
+                hrChart.update('none');
+            }
         });
 
-        // Theme toggle (unchanged)
+        // Theme toggle
         const themeToggle = document.getElementById('themeToggle');
         const body = document.body;
         let darkMode = localStorage.getItem('darkMode') !== 'false';
