@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> 0ceeec48716727e0c264833cc6147db54411c856
 #include <WiFi.h>
 #include <SPIFFS.h>
 #include <SPI.h>
