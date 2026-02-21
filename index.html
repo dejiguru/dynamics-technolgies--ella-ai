@@ -8,6 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <style>
         :root {
             --primary-color: #FF5722;
@@ -59,7 +62,7 @@
         }
     </style>
 </head>
-<body>
+<body class="dark-mode">
     <button class="theme-toggle" id="themeToggle">
         <svg class="icon" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="5"></circle>
@@ -78,6 +81,14 @@
     <div class="main-content"></div>
 
     <script>
+        // Firebase config
+        const firebaseConfig = {
+            databaseURL: "https://ella-b927d-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Theme toggle
         const themeToggle = document.getElementById('themeToggle');
         const body = document.body;
         let darkMode = localStorage.getItem('darkMode') !== 'false';
