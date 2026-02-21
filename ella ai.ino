@@ -1,7 +1,4 @@
-Step 4 – MAX30102 Fix (5:15 PM Saturday)
-Commit: Fixed MAX30102 I2C address shift, reading raw IR data
 
-cpp
 #include <WiFi.h>
 #include <SPIFFS.h>
 #include <SPI.h>
