@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
-    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <style>
@@ -18,12 +17,19 @@
             --card-bg: #FFFFFF;
             --text-main: #1C1C1E;
             --text-muted: #8E8E93;
+            --heart-color: #FF2D55;
+            --oxy-color: #007AFF;
+            --env-color: #34C759;
+            --temp-color: #FF9500;
+            --radius-lg: 32px;
+            --shadow-soft: 0 4px 12px rgba(0,0,0,0.05);
         }
         .dark-mode {
             --bg-color: #000000;
             --card-bg: #1C1C1E;
             --text-main: #FFFFFF;
             --text-muted: #A0A0A0;
+            --shadow-soft: 0 4px 12px rgba(0,0,0,0.5);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -69,12 +75,63 @@
             background: #34C759;
             box-shadow: 0 0 12px rgba(52,199,89,0.6);
         }
+        .main-content {
+            width: 100%;
+            max-width: 800px;
+            margin: 20px auto;
+        }
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        .sensor-card {
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid rgba(128,128,128,0.2);
+        }
+        .card-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .card-value {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-main);
+            line-height: 1;
+        }
+        .card-unit {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin-left: 2px;
+        }
         .icon {
             width: 24px;
             height: 24px;
             stroke: currentColor;
             stroke-width: 2;
             fill: none;
+        }
+        .card-icon-wrapper {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: var(--bg-color);
         }
     </style>
 </head>
@@ -95,38 +152,58 @@
     </button>
 
     <header class="app-header">E.L.L.A <span>CLOUD</span></header>
-    <div class="main-content"></div>
+
+    <div class="main-content">
+        <div class="sensor-grid">
+            <!-- Heart Rate -->
+            <div class="sensor-card">
+                <div class="card-label">Heart Rate</div>
+                <div><span class="card-value" id="hrVal">--</span><span class="card-unit">BPM</span></div>
+                <div class="card-icon-wrapper">
+                    <svg class="icon" viewBox="0 0 24 24" style="color: var(--heart-color);">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>
+                </div>
+            </div>
+            <!-- SpO2 -->
+            <div class="sensor-card">
+                <div class="card-label">O2 Saturation</div>
+                <div><span class="card-value" id="spo2Val">--</span><span class="card-unit">%</span></div>
+                <div class="card-icon-wrapper">
+                    <svg class="icon" viewBox="0 0 24 24" style="color: var(--oxy-color);">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <!-- Body Temp -->
+            <div class="sensor-card">
+                <div class="card-label">Body Temp</div>
+                <div><span class="card-value" id="bodyTempVal">--</span><span class="card-unit">°C</span></div>
+                <div class="card-icon-wrapper">
+                    <svg class="icon" viewBox="0 0 24 24" style="color: var(--temp-color);">
+                        <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
-        // Firebase config
-        const firebaseConfig = {
-            databaseURL: "https://ella-b927d-default-rtdb.firebaseio.com/"
-        };
+        const firebaseConfig = { databaseURL: "https://ella-b927d-default-rtdb.firebaseio.com/" };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // Connection status
         const statusEl = document.getElementById('status');
         database.ref('.info/connected').on('value', (snap) => {
-            const connected = snap.val();
-            statusEl.classList.toggle('status-connected', connected);
+            statusEl.classList.toggle('status-connected', snap.val());
         });
 
-        // Theme toggle
+        //Toggle theme
         const themeToggle = document.getElementById('themeToggle');
         const body = document.body;
         let darkMode = localStorage.getItem('darkMode') !== 'false';
-
-        function setTheme(mode) {
-            body.classList.toggle('dark-mode', mode);
-            localStorage.setItem('darkMode', mode);
-        }
-
-        themeToggle.addEventListener('click', () => {
-            darkMode = !darkMode;
-            setTheme(darkMode);
-        });
-
+        function setTheme(mode) { body.classList.toggle('dark-mode', mode); localStorage.setItem('darkMode', mode); }
+        themeToggle.addEventListener('click', () => { darkMode = !darkMode; setTheme(darkMode); });
         setTheme(darkMode);
     </script>
 </body>
