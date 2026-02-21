@@ -1,3 +1,4 @@
+
 #include <WiFi.h>
 #include <SPIFFS.h>
 #include <SPI.h>
@@ -37,18 +38,20 @@
 #define SPK_LRC  21
 #define SPK_DOUT 18
 
-
+// WiFi
 const char* ssid = "ella";
-const char* password = "12345679";
+const char* password = "12345678";
+
+// Firebase
 const char* FIREBASE_HOST = "ella-b927d-default-rtdb.firebaseio.com";
 const char* FIREBASE_DATABASE_URL = "https://ella-b927d-default-rtdb.firebaseio.com";
 const char* FIREBASE_AUTH = "AIzaSyC_yLxDXOqJMY6WB34vxVHe9JP-457kcvI";
 const char* FIREBASE_DB_SECRET = "6p1xNhaN0ZAYJ4Ouy4iKTW3MujgYm8ji71pYzWOZ";
 
-
-char* DEEPGRAM_KEY = "983ce7a94c3e617a80f52b74d60212c95a353c01";
-char* GROQ_KEY = "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";
-char* SERPER_KEY = "fea12f5e645599a7ee78aaf7ae2d0dafa74ce92e";
+// Deepgram & Groq
+const char* DEEPGRAM_KEY = "983ce7a94c3e617a80f52b74d60212c95a353c01";
+const char* GROQ_KEY = "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";
+const char* SERPER_KEY = "fea12f5e645599a7ee78aaf7ae2d0dafa74ce92e";
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
@@ -646,7 +649,7 @@ void announceMedicalResults() {
   bool spValid = (!isnan(max30102_spo2) && max30102_spo2 > 50 && max30102_spo2 <= 100);
   bool tmpValid = (!isnan(max30102_temp) && max30102_temp > 30);
   if (!hrValid && !spValid) {
-    Serial.println("[");
+    Serial.println("[Med] Measurement failed - Using SIMULATED values");
     max30102_hr = (float)random(68, 98);
     max30102_spo2 = (float)random(96, 100);
     max30102_temp = 36.5 + (random(0, 8) / 10.0);
