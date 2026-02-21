@@ -239,16 +239,28 @@
         function setTheme(mode) { body.classList.toggle('dark-mode', mode); localStorage.setItem('darkMode', mode); }
         themeToggle.addEventListener('click', () => { darkMode = !darkMode; setTheme(darkMode); });
         setTheme(darkMode);
+  
+     <script>
+        const firebaseConfig = { databaseURL: "https://ella-b927d-default-rtdb.firebaseio.com/" };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
 
-        // DOM elements for sensor values
+        const statusEl = document.getElementById('status');
+        database.ref('.info/connected').on('value', (snap) => {
+            statusEl.classList.toggle('status-connected', snap.val());
+        });
+
+        // DOM elements
         const hrVal = document.getElementById('hrVal');
         const spo2Val = document.getElementById('spo2Val');
         const bodyTempVal = document.getElementById('bodyTempVal');
         const envTempVal = document.getElementById('envTempVal');
         const humidityVal = document.getElementById('humidityVal');
         const aqiVal = document.getElementById('aqiVal');
-        const lastUpdate = document.getElementById('lastUpdate');                            ]
-        database.ref('readings').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
+        const lastUpdate = document.getElementById('lastUpdate');
+
+        // 🔴 BUG: Wrong path – should be 'readings' but using 'sensors'
+        database.ref('sensors').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
             const data = snap.val();
             if (!data) return;
 
@@ -263,6 +275,88 @@
                 lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
             }
         });
+
+        // Theme toggle (unchanged)
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        let darkMode = localStorage.getItem('darkMode') !== 'false';
+        function setTheme(mode) { body.classList.toggle('dark-mode', mode); localStorage.setItem('darkMode', mode); }
+        themeToggle.addEventListener('click', () => { darkMode = !darkMode; setTheme(darkMode); });
+        setTheme(darkMode);
+   </head>
+<body class="dark-mode">
+    <div class="main-content">
+        <div class="sensor-grid">
+            <!-- existing 6 cards ... -->
+            <!-- eCO2 -->
+            <div class="sensor-card">
+                <div class="card-label">eCO2</div>
+                <div><span class="card-value" id="eco2Val">--</span><span class="card-unit">ppm</span></div>
+                <div class="card-icon-wrapper">
+                    <svg class="icon" viewBox="0 0 24 24" style="color:#4CAF50;">
+                        <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"></path>
+                        <path d="M11 7h2v10h-2zm-4 4h2v2H7zm8 0h2v2h-2z"></path>
+                    </svg>
+                </div>
+            </div>
+            <!-- TVOC -->
+            <div class="sensor-card">
+                <div class="card-label">TVOC</div>
+                <div><span class="card-value" id="tvocVal">--</span><span class="card-unit">ppb</span></div>
+                <div class="card-icon-wrapper">
+                    <svg class="icon" viewBox="0 0 24 24" style="color:#FF9800;">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+        ...
+    </div>
+
+    <script>
+        const firebaseConfig = { databaseURL: "https://ella-b927d-default-rtdb.firebaseio.com/" };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const statusEl = document.getElementById('status');
+        database.ref('.info/connected').on('value', (snap) => {
+            statusEl.classList.toggle('status-connected', snap.val());
+        });
+
+        const hrVal = document.getElementById('hrVal');
+        const spo2Val = document.getElementById('spo2Val');
+        const bodyTempVal = document.getElementById('bodyTempVal');
+        const envTempVal = document.getElementById('envTempVal');
+        const humidityVal = document.getElementById('humidityVal');
+        const aqiVal = document.getElementById('aqiVal');
+        const eco2Val = document.getElementById('eco2Val');
+        const tvocVal = document.getElementById('tvocVal');
+        const lastUpdate = document.getElementById('lastUpdate');
+        database.ref('readings').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
+            const data = snap.val();
+            if (!data) return;
+
+            hrVal.textContent = data.heartRate || '--';
+            spo2Val.textContent = data.spo2 || '--';
+            bodyTempVal.textContent = data.bodyTemp ? data.bodyTemp.toFixed(1) : '--';
+            envTempVal.textContent = data.temperature ? data.temperature.toFixed(1) : '--';
+            humidityVal.textContent = data.humidity ? Math.round(data.humidity) : '--';
+            aqiVal.textContent = data.aqi || '--';
+            eco2Val.textContent = data.eco2 || '--';
+            tvocVal.textContent = data.tvoc || '--';
+
+            if (data.timestamp) {
+                lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
+            }
+        });
+
+        // Theme toggle (unchanged)
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        let darkMode = localStorage.getItem('darkMode') !== 'false';
+        function setTheme(mode) { body.classList.toggle('dark-mode', mode); localStorage.setItem('darkMode', mode); }
+        themeToggle.addEventListener('click', () => { darkMode = !darkMode; setTheme(darkMode); });
+        setTheme(darkMode);
     </script>
 </body>
 </html>
