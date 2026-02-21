@@ -18,6 +18,8 @@
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Firebase_ESP_Client.h>
 #include <Preferences.h>
+#include <WebSocketsClient.h>
+#include <ESP_I2S.h>
 
 // PINS
 #define TFT_CS 10
@@ -27,6 +29,9 @@
 #define TFT_SCLK 12
 #define TFT_MISO 13
 #define TACTILE_SWITCH_PIN 38
+#define I2S_MIC_SCK 15
+#define I2S_MIC_WS  7
+#define I2S_MIC_SD  4
 
 // WiFi
 const char* ssid = "ella";
@@ -38,6 +43,10 @@ const char* FIREBASE_DATABASE_URL = "https://ella-b927d-default-rtdb.firebaseio.
 const char* FIREBASE_AUTH = "AIzaSyC_yLxDXOqJMY6WB34vxVHe9JP-457kcvI";
 const char* FIREBASE_DB_SECRET = "6p1xNhaN0ZAYJ4Ouy4iKTW3MujgYm8ji71pYzWOZ";
 
+// Deepgram & Groq
+const char* DEEPGRAM_KEY = "983ce7a94c3e617a80f52b74d60212c95a353c01";
+const char* GROQ_KEY = "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";
+//API ARE HARDCODED FOR TRANSPARENCY//
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
 // Sensor objects
@@ -104,6 +113,27 @@ String user_emergency_contact = "";
 String cloudRemindersJson = "[]";
 int lastUpdateId = 0;
 
+// AI Mode
+enum SystemMode { MODE_NORMAL, MODE_AI };
+SystemMode currentMode = MODE_NORMAL;
+String currentInterimText = "";
+
+WebSocketsClient webSocket;
+bool sttConnected = false;
+bool isConnectingSTT = false;
+bool isProcessingAI = false;
+bool isSpeaking = false; // will be used later for TTS
+
+I2SClass mic_i2s;
+int16_t* sBuffer = nullptr;
+float dc_offset = 0.0;
+const float DC_ALPHA = 0.001;
+#define GAIN_BOOSTER_I2S 18
+#define BUFFER_LEN 512
+
+String conversationHistory = "";
+String currentEyeExpression = "NORMAL"; // for eye animations (placeholder)
+
 // Forward declarations
 void drawNormalEyes();
 void drawNavigationBar();
@@ -124,7 +154,19 @@ void checkAutoWeeklyReport();
 void sendWeeklyReport();
 void checkAirQualityAlerts();
 String getRemindersContext();
-void sendEmergencyAlert(String);
+String getSensorContext();
+
+// AI functions
+void switchToAIMode();
+void switchToNormalMode();
+void connectToDeepgram();
+void webSocketEvent(WStype_t type, uint8_t* payload, size_t length);
+void handleSTTResponse(char* json);
+void askGroq(const char* userText);
+String getGroqResponse(String systemPrompt, String userText);
+void drawAIScreen(bool force = false);
+void setEyeExpression(String expr);
+void updateEyes();
 
 // ========== UI Functions ==========
 void drawNormalEyes() {
@@ -156,7 +198,7 @@ void drawStatusDot(bool connected) {
   tft.fillCircle(240-15, 12, 4, connected ? UI_SUCCESS : UI_ERROR);
 }
 
-// ========== drawNormalScreen ==========
+// ========== drawNormalScreen (full version from Step 10) ==========
 void drawNormalScreen(bool force) {
   static unsigned long lastDraw = 0;
   static MedicalState lastRenderedState = (MedicalState)-1;
@@ -577,16 +619,9 @@ void read_max30102() {
       bufferIndex++;
       if (bufferIndex >= 100) {
          Serial.println("[MAX30102] Processing Buffer...");
-         maxim_heart_rate_and_oxygen_saturation(
-           irBuffer, 100, redBuffer,
-           &spo2, &validSPO2, &heartRate, &validHeartRate
-         );
-         if (validHeartRate && heartRate > 40 && heartRate < 180) {
-             max30102_hr = (float)heartRate;
-         }
-         if (validSPO2 && spo2 > 70 && spo2 <= 100) {
-             max30102_spo2 = (float)spo2;
-         }
+         maxim_heart_rate_and_oxygen_saturation(irBuffer, 100, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
+         if (validHeartRate && heartRate > 40 && heartRate < 180) max30102_hr = (float)heartRate;
+         if (validSPO2 && spo2 > 70 && spo2 <= 100) max30102_spo2 = (float)spo2;
          bufferIndex = 0;
       }
    }
@@ -601,9 +636,7 @@ void announceMedicalResults() {
     max30102_hr = (float)random(68, 98);
     max30102_spo2 = (float)random(96, 100);
     max30102_temp = 36.5 + (random(0, 8) / 10.0);
-    hrValid = true;
-    spValid = true;
-    tmpValid = true;
+    hrValid = true; spValid = true; tmpValid = true;
   }
   String hrStr  = hrValid  ? String((int)max30102_hr)     : "unclear";
   String spStr  = spValid  ? String((int)max30102_spo2)   : "unclear";
@@ -611,16 +644,12 @@ void announceMedicalResults() {
   String announcement = "Your heart rate is " + hrStr + " beats per minute. " +
                         "Oxygen saturation is " + spStr + " percent. " +
                         "Body temperature is " + tmpStr + " degrees celsius. ";
-  if (spValid && max30102_spo2 < 90) {
-      announcement += "Warning: Your oxygen level is low. Please rest and breathe deeply.";
-  } else if (hrValid && max30102_hr > 120) {
-      announcement += "Your heart rate is quite high. Please rest and avoid exertion.";
-  } else if (hrValid && max30102_hr < 50) {
-      announcement += "Your heart rate is unusually low. Please check again.";
-  } else {
-      announcement += "All readings are normal. You are doing great!";
-  }
+  if (spValid && max30102_spo2 < 90) announcement += "Warning: Your oxygen level is low. Please rest and breathe deeply.";
+  else if (hrValid && max30102_hr > 120) announcement += "Your heart rate is quite high. Please rest and avoid exertion.";
+  else if (hrValid && max30102_hr < 50) announcement += "Your heart rate is unusually low. Please check again.";
+  else announcement += "All readings are normal. You are doing great!";
   Serial.println("[Med] Announcing: " + announcement);
+  // TTS will be added in Step 12b
 }
 
 // ========== Firebase Functions ==========
@@ -638,17 +667,13 @@ void setupFirebase() {
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
   unsigned long start = millis();
-  while (!Firebase.ready() && millis() - start < 10000) {
-    delay(100);
-  }
+  while (!Firebase.ready() && millis() - start < 10000) delay(100);
   if (Firebase.ready()) {
     firebaseReady = true;
     Serial.println("[Firebase] Connected & Ready!");
     syncUserProfileFromFirebase();
     syncRemindersFromFirebase();
-  } else {
-    Serial.println("[Firebase] Connection Timed Out");
-  }
+  } else Serial.println("[Firebase] Connection Timed Out");
 }
 
 void pushSensorDataToFirebase() {
@@ -666,11 +691,8 @@ void pushSensorDataToFirebase() {
   json.set("eco2", eco2_val);
   json.set("bodyTemp", isnan(max30102_temp) ? 0.0 : max30102_temp);
   json.set("timestamp/.sv", "timestamp");
-  if (Firebase.RTDB.pushJSON(&fbdo, path.c_str(), &json)) {
-    Serial.println("[Firebase] Sensor data pushed");
-  } else {
-    Serial.printf("[Firebase] Push failed: %s\n", fbdo.errorReason().c_str());
-  }
+  if (Firebase.RTDB.pushJSON(&fbdo, path.c_str(), &json)) Serial.println("[Firebase] Sensor data pushed");
+  else Serial.printf("[Firebase] Push failed: %s\n", fbdo.errorReason().c_str());
   lastPush = millis();
 }
 
@@ -679,23 +701,10 @@ void syncUserProfileFromFirebase() {
   if (Firebase.RTDB.getJSON(&fbdo, "/commands/userProfile")) {
       FirebaseJson *json = fbdo.jsonObjectPtr();
       FirebaseJsonData result;
-      json->get(result, "name");
-      if (result.success) user_name = result.to<String>();
-      json->get(result, "telegramBotToken");
-      if (result.success) {
-          cloudBotToken = result.to<String>();
-          prefs.putString("botToken", cloudBotToken);
-      }
-      json->get(result, "telegramChatId");
-      if (result.success) {
-          cloudChatId = result.to<String>();
-          prefs.putString("chatId", cloudChatId);
-      }
-      json->get(result, "emergencyContact");
-      if (result.success) {
-          user_emergency_contact = result.to<String>();
-          prefs.putString("emergency", user_emergency_contact);
-      }
+      json->get(result, "name"); if (result.success) user_name = result.to<String>();
+      json->get(result, "telegramBotToken"); if (result.success) { cloudBotToken = result.to<String>(); prefs.putString("botToken", cloudBotToken); }
+      json->get(result, "telegramChatId"); if (result.success) { cloudChatId = result.to<String>(); prefs.putString("chatId", cloudChatId); }
+      json->get(result, "emergencyContact"); if (result.success) { user_emergency_contact = result.to<String>(); prefs.putString("emergency", user_emergency_contact); }
       if (user_name.length() > 0) prefs.putString("userName", user_name);
   }
 }
@@ -709,9 +718,7 @@ void syncRemindersFromFirebase() {
 }
 
 String getRemindersContext() {
-  if (cloudRemindersJson == "[]" || cloudRemindersJson == "" || cloudRemindersJson == "null") {
-      return "\nREMINDERS: No reminders found.\n";
-  }
+  if (cloudRemindersJson == "[]" || cloudRemindersJson == "" || cloudRemindersJson == "null") return "\nREMINDERS: No reminders found.\n";
   String s = "\nREMINDERS:\n";
   StaticJsonDocument<2048> doc;
   DeserializationError error = deserializeJson(doc, cloudRemindersJson);
@@ -722,10 +729,7 @@ String getRemindersContext() {
           String title = v["detail"] | v["title"] | "";
           String time = v["time"] | "";
           String type = v["type"] | "";
-          if (title.length() > 0) { 
-             s += "- " + title + " (" + type + ") at " + time + "\n";
-             count++;
-          }
+          if (title.length() > 0) { s += "- " + title + " (" + type + ") at " + time + "\n"; count++; }
       }
   } else if (doc.is<JsonObject>()) {
       for (JsonPair p : doc.as<JsonObject>()) {
@@ -733,10 +737,7 @@ String getRemindersContext() {
           String title = v["detail"] | v["title"] | "";
           String time = v["time"] | "";
           String type = v["type"] | "";
-          if (title.length() > 0) { 
-             s += "- " + title + " (" + type + ") at " + time + "\n";
-             count++;
-          }
+          if (title.length() > 0) { s += "- " + title + " (" + type + ") at " + time + "\n"; count++; }
       }
   }
   if (count == 0) return "\nREMINDERS: You have no pending tasks.\n";
@@ -745,9 +746,7 @@ String getRemindersContext() {
 
 bool sendTelegramMessage(String msg) {
   if (cloudBotToken == "" || cloudChatId == "") return false;
-  WiFiClientSecure client;
-  client.setInsecure();
-  client.setHandshakeTimeout(10000);
+  WiFiClientSecure client; client.setInsecure(); client.setHandshakeTimeout(10000);
   HTTPClient http;
   String url = "https://api.telegram.org/bot" + cloudBotToken + "/sendMessage";
   if (!http.begin(client, url)) return false;
@@ -757,12 +756,9 @@ bool sendTelegramMessage(String msg) {
   doc["chat_id"] = cloudChatId;
   doc["text"]    = msg;
   doc["parse_mode"] = "HTML";
-  String payload;
-  serializeJson(doc, payload);
+  String payload; serializeJson(doc, payload);
   int httpCode = http.POST(payload);
-  String response = http.getString();
-  http.end();
-  client.stop();
+  http.end(); client.stop();
   return (httpCode == 200);
 }
 
@@ -782,20 +778,14 @@ void checkRemoteCommands() {
         FirebaseJson *json = fbdo.jsonObjectPtr();
         String newSSID, newPass;
         FirebaseJsonData result;
-        json->get(result, "ssid");
-        if (result.success) newSSID = result.to<String>();
-        json->get(result, "password");
-        if (result.success) newPass = result.to<String>();
+        json->get(result, "ssid"); if (result.success) newSSID = result.to<String>();
+        json->get(result, "password"); if (result.success) newPass = result.to<String>();
         if (newSSID.length() > 0) {
             Serial.println("[Command] New WiFi Config Received!");
-            prefs.begin("ella", false);
-            prefs.putString("ssid", newSSID);
-            prefs.putString("pass", newPass);
-            prefs.end();
+            prefs.begin("ella", false); prefs.putString("ssid", newSSID); prefs.putString("pass", newPass); prefs.end();
             Firebase.RTDB.deleteNode(&fbdo, "/commands/wifiConfig");
             sendTelegramMessage("New Wi-Fi saved. Restarting.");
-            delay(2000);
-            ESP.restart();
+            delay(2000); ESP.restart();
         }
     }
 }
@@ -804,22 +794,15 @@ void syncWithFirebase() {
   static unsigned long lastSync = 0;
   if (millis() - lastSync < 60000) return;
   lastSync = millis();
-  syncUserProfileFromFirebase();
-  syncRemindersFromFirebase();
+  syncUserProfileFromFirebase(); syncRemindersFromFirebase();
 }
 
 void checkAutoWeeklyReport() {
-  struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)) return;
+  struct tm timeinfo; if(!getLocalTime(&timeinfo)) return;
   static bool reportSentToday = false;
   if (timeinfo.tm_wday == 0 && timeinfo.tm_hour == 9 && timeinfo.tm_min == 0) {
-    if (!reportSentToday) {
-      sendWeeklyReport();
-      reportSentToday = true;
-    }
-  } else {
-    reportSentToday = false;
-  }
+    if (!reportSentToday) { sendWeeklyReport(); reportSentToday = true; }
+  } else reportSentToday = false;
 }
 
 void sendWeeklyReport() {
@@ -852,33 +835,25 @@ void checkAirQualityAlerts() {
         alertMsg += "🌫 AQI: " + String(aqi_val) + "\n";
         alertMsg += "🧪 TVOC: " + String(tvoc_val) + " ppb\n";
         alertMsg += "💨 eCO2: " + String(eco2_val) + " ppm\n";
-        if (sendTelegramMessage(alertMsg)) {
-            lastAQIAlert = millis();
-        }
+        if (sendTelegramMessage(alertMsg)) lastAQIAlert = millis();
     }
 }
 
-// ========== Telegram (fixed with larger buffer) ==========
 void processTelegramCommands() {
   static unsigned long lastCheck = 0;
   if (millis() - lastCheck < 10000) return;
   lastCheck = millis();
   if (cloudBotToken == "") return;
-  WiFiClientSecure client;
-  client.setInsecure();
+  WiFiClientSecure client; client.setInsecure();
   HTTPClient http;
   String url = "https://api.telegram.org/bot" + cloudBotToken + "/getUpdates?offset=" + String(lastUpdateId + 1) + "&limit=1";
   if (!http.begin(client, url)) return;
   int code = http.GET();
   if (code != HTTP_CODE_OK) { http.end(); return; }
-  String payload = http.getString();
-  http.end();
-  StaticJsonDocument<2048> doc;  // FIXED: increased buffer
+  String payload = http.getString(); http.end();
+  StaticJsonDocument<2048> doc;
   DeserializationError err = deserializeJson(doc, payload);
-  if (err) {
-    Serial.println("Telegram JSON parse failed");
-    return;
-  }
+  if (err) { Serial.println("Telegram JSON parse failed"); return; }
   JsonArray results = doc["result"].as<JsonArray>();
   if (results.size() > 0) {
     lastUpdateId = results[0]["update_id"];
@@ -895,161 +870,394 @@ void processTelegramCommands() {
       reply += "☁️ TVOC: " + String(tvoc_val) + " ppb\n";
       reply += "💨 eCO2: " + String(eco2_val) + " ppm\n";
     } else if (text == "/health") {
-      if (isnan(max30102_hr)) {
-        reply = "❌ No health data. Place finger on sensor.";
-      } else {
+      if (isnan(max30102_hr)) reply = "❌ No health data. Place finger on sensor.";
+      else {
         reply = "❤️ *Health Vitals*\n\n";
         reply += "💓 HR: " + String((int)max30102_hr) + " BPM\n";
         reply += "🫁 SpO2: " + String((int)max30102_spo2) + "%\n";
       }
-    } else if (text == "/help") {
-      reply = "/status - sensor readings\n/health - vitals\n/help - this";
-    } else {
-      reply = "Unknown command. Type /help";
-    }
+    } else if (text == "/help") reply = "/status - sensor readings\n/health - vitals\n/help - this";
+    else reply = "Unknown command. Type /help";
     if (reply.length() > 0) sendTelegramMessage(reply);
   }
 }
 
-// ========== Emergency Alert ==========
 void sendEmergencyAlert(String condition) {
   Serial.println("[Emergency] " + condition);
   String msg = "🚨 EMERGENCY: " + condition;
   sendTelegramMessage(msg);
 }
 
+// ========== AI Mode Functions ==========
+void switchToAIMode() {
+  if (currentMode == MODE_AI) return;
+  Serial.println("[Mode] Switching to AI");
+  currentMode = MODE_AI;
+  currentMedState = MED_IDLE;
+  currentInterimText = "";
+  setEyeExpression("THINKING");
+  mic_i2s.end(); delay(50);
+  mic_i2s.setPins(I2S_MIC_SCK, I2S_MIC_WS, -1, I2S_MIC_SD);
+  mic_i2s.begin(I2S_MODE_STD, 16000, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO, I2S_STD_SLOT_LEFT);
+  for (int i = 0; i < 500; i++) mic_i2s.read();
+  tft.fillScreen(UI_BG);
+  drawAIScreen(true);
+  connectToDeepgram();
+}
+
+void switchToNormalMode() {
+  if (currentMode == MODE_NORMAL) return;
+  Serial.println("[Mode] Switching to NORMAL");
+  currentMode = MODE_NORMAL;
+  isProcessingAI = false; isSpeaking = false; currentInterimText = "";
+  if (sttConnected) { webSocket.disconnect(); sttConnected = false; }
+  mic_i2s.end();
+  tft.fillScreen(UI_BG);
+  drawNormalScreen(true);
+  setEyeExpression("NORMAL");
+}
+
+void connectToDeepgram() {
+  if (WiFi.status() != WL_CONNECTED || sttConnected || isConnectingSTT) return;
+  isConnectingSTT = true;
+  Serial.println("[STT] Connecting to Deepgram...");
+  String url = "/v1/listen?model=nova-3&language=en&encoding=linear16&sample_rate=16000&channels=1&diarize=true&utterances=true&punctuate=true&smart_format=true&endpointing=250&utterance_end_ms=1000&vad_events=true&interim_results=true";
+  String auth = "Authorization: Token " + String(DEEPGRAM_KEY);
+  webSocket.setExtraHeaders(auth.c_str());
+  webSocket.beginSSL("api.deepgram.com", 443, url.c_str());
+  webSocket.onEvent(webSocketEvent);
+  webSocket.enableHeartbeat(5000, 2000, 2);
+  webSocket.setReconnectInterval(3000);
+}
+
+void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
+  switch (type) {
+    case WStype_DISCONNECTED: sttConnected = false; isConnectingSTT = false; Serial.println("[Deepgram] Disconnected"); break;
+    case WStype_CONNECTED: sttConnected = true; isConnectingSTT = false; Serial.println("[Deepgram] Connected!"); break;
+    case WStype_TEXT: handleSTTResponse((char*)payload); break;
+    default: break;
+  }
+}
+
+void handleSTTResponse(char* json) {
+  StaticJsonDocument<2048> doc;
+  DeserializationError error = deserializeJson(doc, json);
+  if (error) return;
+  const char* type = doc["type"];
+  if (type && strcmp(type, "SpeechStarted") == 0) {
+    // No TTS yet, so just log
+    Serial.println("[Deepgram] Speech started");
+    return;
+  }
+  bool isFinal = doc["is_final"] | false;
+  const char* transcript = doc["channel"]["alternatives"][0]["transcript"];
+  if (isFinal && transcript && strlen(transcript) > 0) {
+    String finalTx = String(transcript); finalTx.trim();
+    currentInterimText = finalTx; drawAIScreen(true);
+    Serial.printf("\n[Final]: %s\n", finalTx.c_str());
+    isProcessingAI = true;
+    setEyeExpression("THINKING");
+    askGroq(transcript);
+  } else if (transcript && strlen(transcript) > 0) {
+    currentInterimText = String(transcript); drawAIScreen();
+  }
+}
+
+String getGroqResponse(String systemPrompt, String userText) {
+  if (WiFi.status() != WL_CONNECTED) return "Error: No WiFi";
+  WiFiClientSecure client; client.setInsecure();
+  HTTPClient http; http.setTimeout(30000);
+  if (!http.begin(client, "https://api.groq.com/openai/v1/chat/completions")) return "Error: Connect Failed";
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", "Bearer " + String(GROQ_KEY));
+  StaticJsonDocument<4096> reqDoc;
+  reqDoc["model"] = "llama-3.3-70b-versatile";
+  reqDoc["max_tokens"] = 500; reqDoc["temperature"] = 0.6;
+  JsonArray messages = reqDoc["messages"].to<JsonArray>();
+  JsonObject sys = messages.add<JsonObject>(); sys["role"] = "system"; sys["content"] = systemPrompt;
+  JsonObject user = messages.add<JsonObject>(); user["role"] = "user"; user["content"] = userText;
+  String requestBody; serializeJson(reqDoc, requestBody);
+  int httpCode = http.POST(requestBody);
+  String result = "Error";
+  if (httpCode == HTTP_CODE_OK) {
+    String response = http.getString();
+    DynamicJsonDocument resDoc(16384);
+    DeserializationError error = deserializeJson(resDoc, response);
+    if (!error) {
+      const char* aiText = resDoc["choices"][0]["message"]["content"];
+      if (aiText) result = String(aiText);
+    }
+  }
+  http.end();
+  return result;
+}
+
+void askGroq(const char* userText) {
+  struct tm timeinfo; String currentTime = "unknown";
+  if(getLocalTime(&timeinfo)) { char timeStr[30]; strftime(timeStr, sizeof(timeStr), "%I:%M %p, %A", &timeinfo); currentTime = String(timeStr); }
+  String profileInfo = (user_name.length() > 0) ? "User's Name: " + user_name + ". Use it occasionally to be warm.\n" : "";
+  String baseSystem = "You are ELLA, a witty and caring Medical Assistant. Be warm, empathetic, and human-like.\n"
+                      "Keep responses short (max 2-3 sentences) but helpful. No emojis.\n"
+                      "Start with [HAPPY], [SAD], [THINKING], [LOVE], [WINK], [X_X], [SUSPICIOUS], [EXCITED], or [NORMAL].\n"
+                      "If you need real-time info or don't know, use [SEARCH: query].\n" 
+                      "Commands: [PLAYSONG: name] or [SEARCH: query].\n"
+                      + profileInfo + "Time: " + currentTime + "\n\n";
+  String userQuery = String(userText); userQuery.toLowerCase();
+  if (userQuery.indexOf("temp") >= 0 || userQuery.indexOf("health") >= 0 || userQuery.indexOf("how") >= 0) baseSystem += getSensorContext();
+  if (conversationHistory.length() > 0) baseSystem += "\nMEMORY:\n" + conversationHistory;
+  String reply = getGroqResponse(baseSystem, userText);
+  if (reply == "" || reply == "Error") reply = "[NORMAL] Sorry, network glitch. Try again.";
+  
+  // Handle commands (simplified for now, just log)
+  if (reply.indexOf("SEARCH:") >= 0) {
+    Serial.println("[Command] Search requested (not implemented yet)");
+  } else if (reply.indexOf("PLAYSONG:") >= 0 || reply.indexOf("[PLAY:") >= 0) {
+    Serial.println("[Command] Play music requested (not implemented yet)");
+  }
+  
+  // Set emotion and show on screen
+  if (reply.indexOf("[HAPPY]") >= 0) setEyeExpression("HAPPY");
+  else if (reply.indexOf("[SAD]") >= 0) setEyeExpression("SAD");
+  else if (reply.indexOf("[THINKING]") >= 0) setEyeExpression("THINKING");
+  else if (reply.indexOf("[LOVE]") >= 0) setEyeExpression("LOVE");
+  else if (reply.indexOf("[WINK]") >= 0) setEyeExpression("WINK");
+  else if (reply.indexOf("[X_X]") >= 0) setEyeExpression("DEAD");
+  else if (reply.indexOf("[SUSPICIOUS]") >= 0) setEyeExpression("SUSPICIOUS");
+  else if (reply.indexOf("[EXCITED]") >= 0) setEyeExpression("EXCITED");
+  else setEyeExpression("NORMAL");
+  
+  // Show response on screen (no TTS yet)
+  currentInterimText = reply;
+  drawAIScreen(true);
+  Serial.println("[AI]: " + reply);
+  
+  String newTurn = "User: " + String(userText) + "\nAI: " + reply + "\n";
+  conversationHistory += newTurn;
+  if (conversationHistory.length() > 600) conversationHistory = conversationHistory.substring(conversationHistory.length() - 600);
+  
+  isProcessingAI = false;
+}
+
+void drawAIScreen(bool force) {
+  static unsigned long lastDraw = 0;
+  if (!force && millis() - lastDraw < 50) return;
+  lastDraw = millis();
+  static bool initialized = false;
+  static int prevPulseSize = 0;
+  static String lastStatus = "";
+  static String lastInterimText = "";
+  static bool lastSttState = false;
+  if (force) { initialized = false; prevPulseSize = 0; lastStatus = ""; lastInterimText = ""; lastSttState = false; }
+  int cx = 120, cy = 120;
+  if (!initialized) {
+    tft.fillScreen(UI_BG);
+    tft.fillRect(0, 0, 240, 25, UI_CARD_BG);
+    tft.setFont(); tft.setTextSize(2); tft.setTextColor(UI_INFO);
+    tft.setCursor((240 - 13 * 12) / 2, 5); tft.print("AI ASSISTANT");
+    drawStatusDot(sttConnected); drawNavigationBar();
+    initialized = true; lastSttState = sttConnected;
+  }
+  if (sttConnected != lastSttState) { drawStatusDot(sttConnected); lastSttState = sttConnected; }
+  if (sttConnected && !isProcessingAI) {
+    int pulseSize = 30 + (int)((sin(millis() / 200.0) + 1.0) * 3.0);
+    if (pulseSize != prevPulseSize) {
+      if (pulseSize > prevPulseSize) for (int r = prevPulseSize + 1; r <= pulseSize; r++) tft.drawCircle(cx, cy, r, UI_INFO);
+      else for (int r = pulseSize + 1; r <= prevPulseSize; r++) tft.drawCircle(cx, cy, r, UI_BG);
+      tft.drawCircle(cx, cy, prevPulseSize + 1, UI_BG);
+      tft.drawCircle(cx, cy, pulseSize + 1, UI_ACCENT);
+      tft.fillRoundRect(cx - 7, cy - 11, 14, 18, 3, UI_BG);
+      tft.fillRect(cx - 9, cy + 9, 18, 4, UI_BG);
+      prevPulseSize = pulseSize;
+    }
+  } else if (isProcessingAI) {
+    if (prevPulseSize > 0) { tft.fillCircle(cx, cy, 37, UI_BG); prevPulseSize = 0; }
+    int angle = (millis() / 5) % 360;
+    tft.fillCircle(cx, cy, 26, UI_BG);
+    for (int i = 0; i < 360; i += 45) {
+      float rad = (angle + i) * 0.01745;
+      tft.fillCircle(cx + cos(rad) * 20, cy + sin(rad) * 20, 3, UI_ACCENT);
+    }
+  } else {
+    if (prevPulseSize != -1) {
+      tft.fillCircle(cx, cy, 37, UI_BG);
+      tft.fillCircle(cx, cy, 30, UI_CARD_BG);
+      tft.drawCircle(cx, cy, 30, UI_ERROR); tft.drawCircle(cx, cy, 32, UI_ERROR);
+      tft.drawLine(cx-10, cy-10, cx+10, cy+10, UI_ERROR);
+      tft.drawLine(cx+10, cy-10, cx-10, cy+10, UI_ERROR);
+      prevPulseSize = -1;
+    }
+  }
+  String status;
+  if (isProcessingAI) status = "Thinking...";
+  else if (sttConnected) status = "Listening...";
+  else status = "Connecting...";
+  if (status != lastStatus) {
+    tft.fillRect(0, cy + 50, 240, 40, UI_BG);
+    tft.setFont(&FreeSansBold9pt7b); tft.setTextSize(1); tft.setTextColor(UI_TEXT_MAIN);
+    int16_t x1, y1; uint16_t w, h;
+    tft.getTextBounds(status, 0, 0, &x1, &y1, &w, &h);
+    tft.setCursor((240 - w) / 2, cy + 70); tft.print(status);
+    lastStatus = status;
+  }
+  if (currentInterimText != lastInterimText) {
+    const int TEXT_Y_TOP = 170, TEXT_Y_BOT = 288, TEXT_HEIGHT = TEXT_Y_BOT - TEXT_Y_TOP, TEXT_X_PAD = 6;
+    tft.fillRect(0, TEXT_Y_TOP, 240, TEXT_HEIGHT, UI_BG); drawNavigationBar();
+    if (currentInterimText.length() > 0) {
+      tft.setFont(&FreeSansBold9pt7b); tft.setTextColor(UI_TEXT_MAIN); tft.setTextWrap(true);
+      tft.setCursor(TEXT_X_PAD, TEXT_Y_TOP + 12); tft.println(currentInterimText);
+    } else {
+      tft.setFont(&FreeSansBold9pt7b); tft.setTextSize(1); tft.setTextColor(UI_TEXT_SUB);
+      String hint = "Say something...";
+      int16_t x1, y1; uint16_t hw, hh;
+      tft.getTextBounds(hint, 0, 0, &x1, &y1, &hw, &hh);
+      tft.setCursor((240 - hw) / 2, TEXT_Y_TOP + TEXT_HEIGHT / 2); tft.print(hint);
+    }
+    lastInterimText = currentInterimText;
+  }
+}
+
+void setEyeExpression(String expr) {
+  Serial.println("[Eyes] Set to: " + expr);
+  currentEyeExpression = expr;
+  updateEyes();
+}
+
+void updateEyes() {
+  // Simplified for now – will be expanded in Step 12c
+  static unsigned long lastBlink = 0;
+  if (millis() - lastBlink > 3000) { drawNormalEyes(); lastBlink = millis(); }
+}
+
+String getSensorContext() {
+  String s = "\nCURRENT SENSOR DATA:\n";
+  s += "Temperature: " + String(temp_aht, 1) + "C\n";
+  s += "Humidity: " + String(humidity_aht, 1) + "%\n";
+  s += "AQI: " + String(aqi_val) + "\n";
+  s += "TVOC: " + String(tvoc_val) + " ppb\n";
+  s += "eCO2: " + String(eco2_val) + " ppm\n";
+  if (!isnan(max30102_hr)) { s += "Heart Rate: " + String(max30102_hr, 0) + " BPM\n"; s += "SpO2: " + String(max30102_spo2, 0) + "%\n"; }
+  return s;
+}
+
 // ========== Setup ==========
 void setup() {
-  Serial.begin(115200);
-  delay(1000);
-  Serial.println("EllaBox Starting...");
+  Serial.begin(115200); delay(1000); Serial.println("EllaBox Starting...");
   SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
-  tft.begin(20000000);
-  tft.setRotation(0);
-  tft.fillScreen(ILI9341_BLACK);
-  tft.setTextColor(ILI9341_WHITE);
-  tft.setCursor(20, 150);
-  tft.print("ELLA BOOTING...");
-  WiFi.setSleep(false);
-  WiFi.begin(ssid, password);
-  Serial.println("WiFi Started...");
-  Wire.begin(8, 9);
-  Serial.println("I2C Started");
+  tft.begin(20000000); tft.setRotation(0);
+  tft.fillScreen(ILI9341_BLACK); tft.setTextColor(ILI9341_WHITE);
+  tft.setCursor(20, 150); tft.print("ELLA BOOTING...");
+  WiFi.setSleep(false); WiFi.begin(ssid, password); Serial.println("WiFi Started...");
+  Wire.begin(8, 9); Serial.println("I2C Started");
   pinMode(TACTILE_SWITCH_PIN, INPUT_PULLUP);
 
   tcaselect(CH_AHT);
-  if (!aht.begin()) Serial.println("AHT20 not found!");
-  else Serial.println("AHT20 OK");
+  if (!aht.begin()) Serial.println("AHT20 not found!"); else Serial.println("AHT20 OK");
   tcaselect(CH_AHT);
   ens160.begin(&Wire, 0x53);
   if (!ens160.init()) Serial.println("ENS160 not found!");
-  else {
-    ens160.startStandardMeasure();
-    Serial.println("ENS160 OK");
-  }
+  else { ens160.startStandardMeasure(); Serial.println("ENS160 OK"); }
   tcaselect(CH_MAX);
   Wire.beginTransmission(0x57);
   if (Wire.endTransmission() != 0) Serial.println("MAX30102 NOT DETECTED on I2C!");
-  if (!particleSensor.begin(Wire, 0x57)) {
-    Serial.println("MAX30102 not found!");
-  } else {
+  if (!particleSensor.begin(Wire, 0x57)) Serial.println("MAX30102 not found!");
+  else {
     Serial.println("MAX30102 OK");
     particleSensor.setup(0x3C, 8, 3, 100, 411, 4096);
-    particleSensor.setPulseAmplitudeRed(0x3C);
-    particleSensor.setPulseAmplitudeIR(0x3C);
+    particleSensor.setPulseAmplitudeRed(0x3C); particleSensor.setPulseAmplitudeIR(0x3C);
   }
   tcaselect(CH_EYE_LEFT);
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) Serial.println("Left Eye Failed");
-  else {
-    Serial.println("Left Eye OK");
-    display.clearDisplay();
-    display.display();
-  }
+  else { Serial.println("Left Eye OK"); display.clearDisplay(); display.display(); }
   tcaselect(CH_EYE_RIGHT);
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) Serial.println("Right Eye Failed");
-  else {
-    Serial.println("Right Eye OK");
-    display.clearDisplay();
-    display.display();
-  }
+  else { Serial.println("Right Eye OK"); display.clearDisplay(); display.display(); }
 
-  // Firebase after WiFi
+  if (psramFound()) sBuffer = (int16_t*)ps_malloc(BUFFER_LEN * sizeof(int16_t));
+  else sBuffer = (int16_t*)malloc(BUFFER_LEN * sizeof(int16_t));
+  if (sBuffer == nullptr) { Serial.println("Failed to allocate sBuffer!"); while(1); }
+  memset(sBuffer, 0, BUFFER_LEN * sizeof(int16_t));
+
   if (WiFi.status() == WL_CONNECTED) setupFirebase();
 }
 
 // ========== Loop ==========
-void loop() {
-  static unsigned long lastRead = 0;
-  if (millis() - lastRead > 500) {
-    lastRead = millis();
-    tcaselect(CH_AHT);
-    sensors_event_t hum, temp;
-    if (aht.getEvent(&hum, &temp)) {
-      temp_aht = temp.temperature;
-      humidity_aht = hum.relative_humidity;
+void processTactileSwitch() {
+  static int lastState = HIGH;
+  int reading = digitalRead(TACTILE_SWITCH_PIN);
+  static unsigned long lastDebounce = 0;
+  if (reading != lastState) lastDebounce = millis();
+  if ((millis() - lastDebounce) > 50) {
+    if (reading == LOW) {
+      if (currentMode == MODE_NORMAL) switchToAIMode(); else switchToNormalMode();
     }
-    tcaselect(CH_AHT);
-    if (ens160.update() == RESULT_OK) {
-      aqi_val = ens160.getAirQualityIndex_UBA();
-      tvoc_val = ens160.getTvoc();
-      eco2_val = ens160.getEco2();
-    }
-    tcaselect(CH_MAX);
-    long irValue = particleSensor.getIR();
-    switch (currentMedState) {
-      case MED_IDLE:
-        if (irValue > 30000) {
-          Serial.println("[Med] Finger Detected -> Waiting...");
-          currentMedState = MED_WAIT_FINGER;
-          medStateTimer = millis();
-        }
-        break;
-      case MED_WAIT_FINGER:
-        if (irValue > 50000) {
-          currentMedState = MED_PLACE_FINGER;
-          medStateTimer = millis();
-        } else if (millis() - medStateTimer > 5000) {
-          currentMedState = MED_IDLE;
-          Serial.println("[Med] Timeout waiting for finger");
-        }
-        break;
-      case MED_PLACE_FINGER:
-        if (millis() - medStateTimer > 5000) {
-           if (irValue > 50000) {
-             currentMedState = MED_MEASURING;
-             medStateTimer = millis();
-           } else {
-             currentMedState = MED_IDLE;
-           }
-        } else if (irValue < 50000) {
-           currentMedState = MED_IDLE;
-        }
-        break;
-      case MED_MEASURING:
-        read_max30102();
-        if (millis() - medStateTimer > 30000) {
-          currentMedState = MED_RESULT;
-          medStateTimer = millis();
-          announceMedicalResults();
-        }
-        break;
-      case MED_RESULT:
-        if (millis() - medStateTimer > 10000 || irValue < 50000) {
-          currentMedState = MED_IDLE;
-        }
-        break;
-    }
-    drawNormalEyes();
-    drawNormalScreen(false);
   }
+  lastState = reading;
+}
 
-  processTelegramCommands();
-  if (firebaseReady) {
-    pushSensorDataToFirebase();
-    syncWithFirebase();
-    checkRemoteCommands();
-    checkAutoWeeklyReport();
-    checkAirQualityAlerts();
+void loop() {
+  processTactileSwitch();
+  static unsigned long lastRead = 0;
+  if (currentMode == MODE_NORMAL) {
+    if (millis() - lastRead > 500) {
+      lastRead = millis();
+      tcaselect(CH_AHT);
+      sensors_event_t hum, temp;
+      if (aht.getEvent(&hum, &temp)) { temp_aht = temp.temperature; humidity_aht = hum.relative_humidity; }
+      tcaselect(CH_AHT);
+      if (ens160.update() == RESULT_OK) { aqi_val = ens160.getAirQualityIndex_UBA(); tvoc_val = ens160.getTvoc(); eco2_val = ens160.getEco2(); }
+      tcaselect(CH_MAX);
+      long irValue = particleSensor.getIR();
+      switch (currentMedState) {
+        case MED_IDLE:
+          if (irValue > 30000) { Serial.println("[Med] Finger Detected -> Waiting..."); currentMedState = MED_WAIT_FINGER; medStateTimer = millis(); }
+          break;
+        case MED_WAIT_FINGER:
+          if (irValue > 50000) { currentMedState = MED_PLACE_FINGER; medStateTimer = millis(); }
+          else if (millis() - medStateTimer > 5000) { currentMedState = MED_IDLE; Serial.println("[Med] Timeout waiting for finger"); }
+          break;
+        case MED_PLACE_FINGER:
+          if (millis() - medStateTimer > 5000) {
+             if (irValue > 50000) { currentMedState = MED_MEASURING; medStateTimer = millis(); }
+             else currentMedState = MED_IDLE;
+          } else if (irValue < 50000) currentMedState = MED_IDLE;
+          break;
+        case MED_MEASURING:
+          read_max30102();
+          if (millis() - medStateTimer > 30000) { currentMedState = MED_RESULT; medStateTimer = millis(); announceMedicalResults(); }
+          break;
+        case MED_RESULT:
+          if (millis() - medStateTimer > 10000 || irValue < 50000) currentMedState = MED_IDLE;
+          break;
+      }
+      drawNormalEyes();
+      drawNormalScreen(false);
+    }
+    processTelegramCommands();
+    if (firebaseReady) {
+      pushSensorDataToFirebase(); syncWithFirebase(); checkRemoteCommands(); checkAutoWeeklyReport(); checkAirQualityAlerts();
+    }
+  } else {
+    if (sttConnected && !isProcessingAI && !isSpeaking) {
+      size_t bytesIn = mic_i2s.readBytes((char*)sBuffer, BUFFER_LEN * sizeof(int16_t));
+      if (bytesIn > 0) {
+        int16_t tempSamples[BUFFER_LEN];
+        size_t numSamples = bytesIn / 2;
+        memcpy(tempSamples, sBuffer, numSamples * 2);
+        int validSamples = 0;
+        for (int i = 0; i < numSamples; i++) {
+          int16_t sample = tempSamples[i];
+          if (sample != 0 && sample != -1 && sample != 1) {
+            dc_offset = dc_offset * (1.0 - DC_ALPHA) + sample * DC_ALPHA;
+            float centered = sample - dc_offset;
+            int32_t amplified = (int32_t)centered * GAIN_BOOSTER_I2S;
+            if (amplified > 32767) amplified = 32767; else if (amplified < -32768) amplified = -32768;
+            sBuffer[validSamples++] = (int16_t)amplified;
+          }
+        }
+        if (validSamples > 0) webSocket.sendBIN((uint8_t*)sBuffer, validSamples * 2);
+      }
+    }
+    webSocket.loop();
   }
   delay(10);
 }
