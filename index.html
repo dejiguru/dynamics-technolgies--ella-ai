@@ -9,13 +9,27 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #FF5722;
+            --bg-color: #F2F2F7;
+            --card-bg: #FFFFFF;
+            --text-main: #1C1C1E;
+            --text-muted: #8E8E93;
+        }
+        .dark-mode {
+            --bg-color: #000000;
+            --card-bg: #1C1C1E;
+            --text-main: #FFFFFF;
+            --text-muted: #A0A0A0;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: #000;
-            color: #fff;
+            background-color: var(--bg-color);
+            color: var(--text-main);
             font-family: 'Roboto Condensed', sans-serif;
             padding: 10px;
             min-height: 100vh;
+            transition: background-color 0.3s, color 0.3s;
         }
         .app-header {
             text-align: center;
@@ -23,12 +37,43 @@
             font-family: 'Orbitron', sans-serif;
             font-size: 1.8rem;
             font-weight: 900;
-            color: #fff;
         }
-        .app-header span { color: #FF5722; }
+        .app-header span { color: var(--primary-color); }
+        .theme-toggle {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+        }
+        .icon {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
     </style>
 </head>
 <body>
+    <button class="theme-toggle" id="themeToggle">
+        <svg class="icon" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+    </button>
+
     <header class="app-header">E.L.L.A <span>CLOUD</span></header>
     <div class="main-content"></div>
 </body>
