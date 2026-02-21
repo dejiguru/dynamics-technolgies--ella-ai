@@ -1,68 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <title>E.L.L.A Cloud Dashboard</title>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+
+    <!-- PWA / Full Screen Settings -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ELLA Cloud">
+    <meta name="application-name" content="ELLA Cloud">
     <meta name="theme-color" content="#FF5722">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favicon.png">
+
+    <!-- PWA Manifest -->
+    <script>
+        const manifest = {
+            name: "E.L.L.A Cloud Dashboard",
+            short_name: "ELLA Cloud",
+            start_url: window.location.origin + "/",
+            display: "standalone",
+            background_color: "#000000",
+            theme_color: "#FF5722",
+            orientation: "any"
+        };
+        const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = URL.createObjectURL(blob);
+        document.head.appendChild(link);
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&family=Roboto+Condensed:wght@400;700&display=swap"
+        rel="stylesheet">
+
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-    <!-- Chart.js -->
+
+    <!-- Chart.js for Medical Charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
     <style>
         :root {
             --primary-color: #FF5722;
+            --primary-dim: rgba(255, 87, 34, 0.1);
+            --primary-glow: rgba(255, 87, 34, 0.3);
             --bg-color: #F2F2F7;
             --card-bg: #FFFFFF;
-            --text-main: #1C1C1E;
-            --text-muted: #8E8E93;
+            --card-border: #E5E5EA;
             --heart-color: #FF2D55;
             --oxy-color: #007AFF;
             --env-color: #34C759;
             --temp-color: #FF9500;
+            --text-main: #1C1C1E;
+            --text-muted: #8E8E93;
+            --text-inverse: #FFFFFF;
+            --font-display: 'Orbitron', sans-serif;
+            --font-data: 'Rajdhani', sans-serif;
+            --font-ui: 'Roboto Condensed', sans-serif;
+            --radius-sm: 12px;
+            --radius-md: 20px;
             --radius-lg: 32px;
-            --shadow-soft: 0 4px 12px rgba(0,0,0,0.05);
+            --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.05);
+            --shadow-hard: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
+
         .dark-mode {
             --bg-color: #000000;
             --card-bg: #1C1C1E;
+            --card-border: #333333;
             --text-main: #FFFFFF;
             --text-muted: #A0A0A0;
-            --shadow-soft: 0 4px 12px rgba(0,0,0,0.5);
+            --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.5);
+            --shadow-hard: 0 4px 20px rgba(0, 0, 0, 0.8);
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html,
+        body {
+            overflow-y: auto;
+            height: 100%;
+            -webkit-user-select: none;
+            user-select: none;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        *::-webkit-scrollbar {
+            display: none;
+        }
+
         body {
             background-color: var(--bg-color);
+            font-family: var(--font-ui);
             color: var(--text-main);
-            font-family: 'Roboto Condensed', sans-serif;
+            background-image:
+                radial-gradient(circle at 10% 10%, rgba(128, 128, 128, 0.05) 1px, transparent 1px),
+                radial-gradient(circle at 50% 50%, rgba(255, 87, 34, 0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             padding: 10px;
             min-height: 100vh;
-            transition: background-color 0.3s, color 0.3s;
+            padding-bottom: 140px;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
-        .app-header {
-            text-align: center;
-            margin-top: 40px;
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1.8rem;
-            font-weight: 900;
+
+        .icon {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+            display: inline-block;
+            vertical-align: middle;
         }
-        .app-header span { color: var(--primary-color); }
-        .theme-toggle {
-            position: fixed;
-            top: 15px;
-            right: 15px;
-            background: transparent;
-            border: none;
-            color: var(--text-main);
-            cursor: pointer;
-            width: 36px;
-            height: 36px;
+
+        .icon-fill {
+            fill: currentColor;
+            stroke: none;
         }
+
+        .icon-sm {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Connection Status */
         .status-indicator {
             position: fixed;
             top: 22px;
@@ -72,30 +156,125 @@
             background: #FF3B30;
             border-radius: 50%;
             z-index: 200;
-            transition: 0.3s;
-            box-shadow: 0 0 8px rgba(255,59,48,0.5);
+            transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 8px rgba(255, 59, 48, 0.5);
         }
+
         .status-connected {
             background: #34C759;
-            box-shadow: 0 0 12px rgba(52,199,89,0.6);
+            box-shadow: 0 0 12px rgba(52, 199, 89, 0.6);
         }
-        .icon {
-            width: 24px;
-            height: 24px;
-            stroke: currentColor;
-            stroke-width: 2;
-            fill: none;
+
+        /* Header */
+        .app-header {
+            width: 100%;
+            text-align: center;
+            margin-top: 45px;
+            margin-bottom: 15px;
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            font-weight: 900;
+            font-style: italic;
+            color: var(--text-main);
+            text-transform: uppercase;
+            letter-spacing: 3px;
         }
+
+        .app-header span {
+            color: var(--primary-color);
+        }
+
+        .sync-info {
+            font-size: 0.4em;
+            font-family: var(--font-ui);
+            color: var(--text-muted);
+            margin-top: 5px;
+            text-transform: none;
+            letter-spacing: 0;
+            font-weight: 400;
+        }
+
+        .cloud-badge {
+            font-size: 0.5em;
+            background: var(--primary-color);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-left: 10px;
+            vertical-align: middle;
+            letter-spacing: 1px;
+        }
+
+        /* Theme Toggle Button - Right corner */
+        .theme-toggle {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            width: 36px;
+            height: 36px;
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            color: var(--text-main);
+            transition: all 0.2s;
+        }
+
+        .theme-toggle:hover {
+            background: var(--card-bg);
+        }
+
+        .theme-toggle:active {
+            transform: scale(0.9);
+        }
+
+        /* Settings Items */
+        .settings-item {
+            margin-bottom: 20px;
+            background: var(--bg-color);
+            padding: 15px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--card-border);
+        }
+
+        .settings-item label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 700;
+            font-size: 0.85em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Main Content */
         .main-content {
             width: 100%;
             max-width: 800px;
-            margin: 20px auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
         }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Sensor Grid */
         .sensor-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 12px;
         }
+
         .sensor-card {
             background: var(--card-bg);
             border-radius: var(--radius-lg);
@@ -103,28 +282,16 @@
             display: flex;
             flex-direction: column;
             position: relative;
+            overflow: hidden;
             box-shadow: var(--shadow-soft);
-            border: 1px solid rgba(128,128,128,0.2);
+            border: 1px solid var(--card-border);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        .card-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            font-weight: 700;
-            margin-bottom: 6px;
+
+        .sensor-card:active {
+            transform: scale(0.96);
         }
-        .card-value {
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--text-main);
-            line-height: 1;
-        }
-        .card-unit {
-            font-size: 1rem;
-            color: var(--text-muted);
-            margin-left: 2px;
-        }
+
         .card-icon-wrapper {
             position: absolute;
             bottom: 12px;
@@ -137,32 +304,342 @@
             border-radius: 50%;
             background: var(--bg-color);
         }
-        /* Chart container styles */
-        .chart-container {
-            background: rgba(255,255,255,0.05);
-            border-radius: 20px;
-            padding: 20px;
-            border: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 15px;
+
+        .card-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 6px;
         }
+
+        .card-value {
+            font-family: var(--font-data);
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-main);
+            line-height: 1;
+        }
+
+        .card-unit {
+            font-size: 1rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-left: 2px;
+        }
+
+        .card-temp .icon {
+            color: var(--temp-color);
+        }
+
+        .card-hum .icon {
+            color: var(--oxy-color);
+        }
+
+        .card-hr .icon {
+            color: var(--heart-color);
+        }
+
+        .card-spo2 .icon {
+            color: var(--oxy-color);
+        }
+
+        .card-env .icon {
+            color: var(--env-color);
+        }
+
+        /* Last Update */
+        .last-update {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.8em;
+            padding: 10px;
+        }
+
+        /* Emergency Button */
+        .emergency-btn {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 400px;
+            padding: 15px;
+            background: #FF3B30;
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .emergency-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Control Panel - Floating Dock */
+        .control-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 95%;
+            max-width: 400px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: var(--radius-lg);
+            padding: 10px 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 100;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .dark-mode .control-panel {
+            background: rgba(28, 28, 30, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .dock-btn {
+            flex: 1;
+            padding: 12px 8px;
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-md);
+            color: var(--text-muted);
+            font-family: var(--font-ui);
+            font-weight: 700;
+            font-size: 0.75em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .dock-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        .dock-btn .icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Chart Container (Glassmorphism Upgrade) */
+        .chart-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: transform 0.2s ease;
+        }
+
+        .chart-container:hover {
+            border-color: rgba(255, 87, 34, 0.3);
+            transform: translateY(-2px);
+        }
+
         .chart-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 12px;
+            border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+            padding-bottom: 8px;
         }
-        .tab-content {
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .sensor-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .card-value {
+                font-size: 1.6rem;
+            }
+
+            .app-header {
+                font-size: 1.3rem;
+                margin-top: 35px;
+            }
+        }
+
+        /* Offline Banner */
+        .offline-banner {
             display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--heart-color);
+            color: white;
+            padding: 12px 24px;
+            border-radius: var(--radius-lg);
+            font-weight: 700;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(255, 45, 85, 0.4);
         }
-        .tab-content.active {
+
+        .offline-banner.show {
             display: block;
+        }
+
+        /* Toast */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .toast {
+            background: rgba(30, 30, 30, 0.9);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 50px;
+            font-size: 0.95em;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast-success {
+            border-color: var(--primary-color);
+        }
+
+        .toast-error {
+            border-color: var(--heart-color);
+        }
+
+        /* Type Card UI */
+        .type-card {
+            background: var(--bg-color);
+            border: 2px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            padding: 15px 5px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            opacity: 0.6;
+        }
+
+        .type-card svg {
+            width: 28px;
+            height: 28px;
+            fill: none;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .type-card.selected {
+            border-color: var(--primary-color);
+            background: rgba(46, 213, 115, 0.05);
+            opacity: 1;
+            transform: translateY(-2px);
+        }
+
+        /* EMERGENCY BUTTON (FLOATING) */
+        .emergency-float {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FF2D55, #D50000);
+            box-shadow: 0 4px 15px rgba(255, 45, 85, 0.5);
+            border: none;
+            color: white;
+            font-weight: 900;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            animation: pulse-red 2s infinite;
+        }
+
+        .emergency-float:active {
+            transform: scale(0.9);
+        }
+
+        .emergency-float svg {
+            width: 28px;
+            height: 28px;
+            fill: white;
+            margin-bottom: 2px;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 45, 85, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 15px rgba(255, 45, 85, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 45, 85, 0);
+            }
+        }
+
+        /* WiFi Divider */
+        .wifi-divider {
+            margin: 20px 0 10px 0;
+            border-top: 1px solid var(--card-border);
+            padding-top: 15px;
+            font-weight: 700;
+            color: var(--primary-color);
         }
     </style>
 </head>
+
 <body class="dark-mode">
     <div class="status-indicator" id="status"></div>
+
     <button class="theme-toggle" id="themeToggle">
-        <svg class="icon" viewBox="0 0 24 24">
+        <svg class="icon" viewBox="0 0 24 24" id="themeIcon">
             <circle cx="12" cy="12" r="5"></circle>
             <line x1="12" y1="1" x2="12" y2="3"></line>
             <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -175,309 +652,823 @@
         </svg>
     </button>
 
-    <header class="app-header">E.L.L.A <span>CLOUD</span></header>
+    <header class="app-header">
+        E.L.L.A <span>CLOUD</span>
+        <span class="cloud-badge">V2.2 Lite</span>
+        <div id="sync-info" class="sync-info">Last sync: Just now</div>
+    </header>
 
     <div class="main-content">
+
         <!-- Dashboard Tab -->
         <div class="tab-content active" id="tab-dashboard">
             <div class="sensor-grid">
                 <!-- Heart Rate -->
-                <div class="sensor-card">
+                <div class="sensor-card card-hr">
                     <div class="card-label">Heart Rate</div>
                     <div><span class="card-value" id="hrVal">--</span><span class="card-unit">BPM</span></div>
                     <div class="card-icon-wrapper">
-                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--heart-color);">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        <svg class="icon icon-fill" viewBox="0 0 24 24">
+                            <path
+                                d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z">
+                            </path>
                         </svg>
                     </div>
                 </div>
+
                 <!-- SpO2 -->
-                <div class="sensor-card">
+                <div class="sensor-card card-spo2">
                     <div class="card-label">O2 Saturation</div>
                     <div><span class="card-value" id="spo2Val">--</span><span class="card-unit">%</span></div>
                     <div class="card-icon-wrapper">
-                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--oxy-color);">
+                        <svg class="icon icon-fill" viewBox="0 0 24 24">
                             <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                         </svg>
                     </div>
                 </div>
+
                 <!-- Body Temp -->
-                <div class="sensor-card">
+                <div class="sensor-card card-temp">
                     <div class="card-label">Body Temp</div>
                     <div><span class="card-value" id="bodyTempVal">--</span><span class="card-unit">°C</span></div>
                     <div class="card-icon-wrapper">
-                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--temp-color);">
+                        <svg class="icon" viewBox="0 0 24 24">
                             <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
                         </svg>
                     </div>
                 </div>
+
                 <!-- Env Temp -->
-                <div class="sensor-card">
+                <div class="sensor-card card-env">
                     <div class="card-label">Environment</div>
                     <div><span class="card-value" id="envTempVal">--</span><span class="card-unit">°C</span></div>
                     <div class="card-icon-wrapper">
-                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--env-color);">
+                        <svg class="icon" viewBox="0 0 24 24">
                             <circle cx="12" cy="12" r="5"></circle>
                             <line x1="12" y1="1" x2="12" y2="3"></line>
                         </svg>
                     </div>
                 </div>
+
                 <!-- Humidity -->
-                <div class="sensor-card">
+                <div class="sensor-card card-hum">
                     <div class="card-label">Humidity</div>
                     <div><span class="card-value" id="humidityVal">--</span><span class="card-unit">%</span></div>
                     <div class="card-icon-wrapper">
-                        <svg class="icon" viewBox="0 0 24 24" style="color: var(--oxy-color);">
+                        <svg class="icon" viewBox="0 0 24 24">
                             <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                         </svg>
                     </div>
                 </div>
+
                 <!-- AQI -->
-                <div class="sensor-card">
+                <div class="sensor-card card-aqi">
                     <div class="card-label">AQI</div>
                     <div><span class="card-value" id="aqiVal">--</span><span class="card-unit">Score</span></div>
                     <div class="card-icon-wrapper">
-                        <svg class="icon" viewBox="0 0 24 24" style="color:#9C27B0;">
-                            <path d="M8 16.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM14 6.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM21.5 10a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"></path>
+                        <svg class="icon" viewBox="0 0 24 24" style="color:#9C27B0">
+                            <path
+                                d="M8 16.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM14 6.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM21.5 10a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z">
+                            </path>
                         </svg>
                     </div>
                 </div>
+
                 <!-- eCO2 -->
-                <div class="sensor-card">
+                <div class="sensor-card card-eco2">
                     <div class="card-label">eCO2</div>
                     <div><span class="card-value" id="eco2Val">--</span><span class="card-unit">ppm</span></div>
                     <div class="card-icon-wrapper">
-                        <svg class="icon" viewBox="0 0 24 24" style="color:#4CAF50;">
-                            <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"></path>
+                        <svg class="icon icon-fill" viewBox="0 0 24 24" style="color:#4CAF50">
+                            <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z">
+                            </path>
                             <path d="M11 7h2v10h-2zm-4 4h2v2H7zm8 0h2v2h-2z"></path>
                         </svg>
                     </div>
                 </div>
+
                 <!-- TVOC -->
-                <div class="sensor-card">
+                <div class="sensor-card card-tvoc">
                     <div class="card-label">TVOC</div>
                     <div><span class="card-value" id="tvocVal">--</span><span class="card-unit">ppb</span></div>
                     <div class="card-icon-wrapper">
-                        <svg class="icon" viewBox="0 0 24 24" style="color:#FF9800;">
+                        <svg class="icon icon-fill" viewBox="0 0 24 24" style="color:#FF9800">
                             <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                         </svg>
                     </div>
                 </div>
             </div>
-            <div class="last-update" style="text-align:center; margin-top:10px; color:var(--text-muted);">
-                Last update: <span id="lastUpdate">--</span>
-            </div>
+
+            <div class="last-update">Last update: <span id="lastUpdate">--</span></div>
         </div>
 
-        <!-- History Tab with all charts (now using correct canvas IDs) -->
+        <!-- History Tab -->
         <div class="tab-content" id="tab-history">
-            <!-- Heart Rate Chart -->
-            <div class="chart-container">
-                <div class="chart-header">
-                    <span style="color: var(--heart-color);">Heart Rate</span>
-                    <span id="hrCurrent">--</span>
-                </div>
-                <div style="height:160px;">
-                    <canvas id="hrChartCanvas"></canvas>   <!-- ✅ fixed ID -->
+            <!-- Patient Summary -->
+            <div class="patient-summary"
+                style="background: var(--card-bg); border-radius: var(--radius-md); padding: 15px; margin-bottom: 15px; border: 1px solid var(--card-border);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-size: 0.75em; color: var(--text-muted); text-transform: uppercase;">Patient
+                            Health Report</div>
+                        <div style="font-size: 1.1em; font-weight: 700; color: var(--text-main);">ELLA Monitoring</div>
+                    </div>
+                    <button id="simulateBtn"
+                        style="background: var(--primary-color); color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: 700; cursor: pointer; font-size: 0.8em;">Load
+                        Demo Data</button>
                 </div>
             </div>
-            <!-- SpO2 Chart -->
-            <div class="chart-container">
+
+            <!-- Heart Rate Chart -->
+            <div class="chart-container" style="margin-bottom: 15px;">
                 <div class="chart-header">
-                    <span style="color: var(--oxy-color);">SpO2 Levels</span>
-                    <span id="spo2Current">--</span>
+                    <span
+                        style="font-weight: 700; color: var(--heart-color); text-transform: uppercase; letter-spacing: 1px;">Heart
+                        Rate</span>
+                    <span id="hrCurrent"
+                        style="font-family: var(--font-data); font-weight: 700; font-size: 1.2em;">--</span>
                 </div>
-                <div style="height:160px;">
+                <div style="position: relative; height: 160px; width: 100%;">
+                    <canvas id="hrChartCanvas"></canvas>
+                </div>
+            </div>
+
+            <!-- SpO2 Chart -->
+            <div class="chart-container" style="margin-bottom: 15px;">
+                <div class="chart-header">
+                    <span
+                        style="font-weight: 700; color: var(--oxy-color); text-transform: uppercase; letter-spacing: 1px;">SpO2
+                        Levels</span>
+                    <span id="spo2Current"
+                        style="font-family: var(--font-data); font-weight: 700; font-size: 1.2em;">--</span>
+                </div>
+                <div style="position: relative; height: 160px; width: 100%;">
                     <canvas id="spo2ChartCanvas"></canvas>
                 </div>
             </div>
+
             <!-- Body Temp Chart -->
-            <div class="chart-container">
+            <div class="chart-container" style="margin-bottom: 15px;">
                 <div class="chart-header">
-                    <span style="color: var(--temp-color);">Body Temperature</span>
-                    <span id="btCurrent">--</span>
+                    <span
+                        style="font-weight: 700; color: var(--temp-color); text-transform: uppercase; letter-spacing: 1px;">Body
+                        Temperature</span>
+                    <span id="btCurrent"
+                        style="font-family: var(--font-data); font-weight: 700; font-size: 1.2em;">--</span>
                 </div>
-                <div style="height:160px;">
+                <div style="position: relative; height: 160px; width: 100%;">
                     <canvas id="btChartCanvas"></canvas>
                 </div>
             </div>
-            <!-- Environment Temp Chart -->
-            <div class="chart-container">
+
+            <!-- Env Temp Chart -->
+            <div class="chart-container" style="margin-bottom: 15px;">
                 <div class="chart-header">
-                    <span style="color: #FFC107;">Room Temp</span>
-                    <span id="etCurrent">--</span>
+                    <span style="font-weight: 700; color: #FFC107; text-transform: uppercase; letter-spacing: 1px;">Room
+                        Temp</span>
+                    <span id="etCurrent"
+                        style="font-family: var(--font-data); font-weight: 700; font-size: 1.2em;">--</span>
                 </div>
-                <div style="height:160px;">
+                <div style="position: relative; height: 160px; width: 100%;">
                     <canvas id="etChartCanvas"></canvas>
                 </div>
             </div>
+
             <!-- Humidity Chart -->
-            <div class="chart-container">
+            <div class="chart-container" style="margin-bottom: 15px;">
                 <div class="chart-header">
-                    <span style="color: var(--env-color);">Humidity</span>
-                    <span id="humCurrent">--</span>
+                    <span
+                        style="font-weight: 700; color: var(--env-color); text-transform: uppercase; letter-spacing: 1px;">Humidity</span>
+                    <span id="humCurrent"
+                        style="font-family: var(--font-data); font-weight: 700; font-size: 1.2em;">--</span>
                 </div>
-                <div style="height:160px;">
+                <div style="position: relative; height: 160px; width: 100%;">
                     <canvas id="humChartCanvas"></canvas>
                 </div>
             </div>
-            <!-- AQI Chart -->
-            <div class="chart-container">
+
+            <!-- Air Quality Chart -->
+            <div class="chart-container" style="margin-bottom: 15px;">
                 <div class="chart-header">
-                    <span style="color: #9C27B0;">Air Quality (AQI)</span>
-                    <span id="aqiCurrent">--</span>
+                    <span style="font-weight: 700; color: #9C27B0; text-transform: uppercase; letter-spacing: 1px;">Air
+                        Quality (AQI)</span>
+                    <span id="aqiCurrent"
+                        style="font-family: var(--font-data); font-weight: 700; font-size: 1.2em;">--</span>
                 </div>
-                <div style="height:160px;">
+                <div style="position: relative; height: 160px; width: 100%;">
                     <canvas id="aqiChartCanvas"></canvas>
                 </div>
             </div>
+
+            <!-- Readings Log -->
+            <div class="log-list" id="logList"
+                style="background: var(--card-bg); border-radius: var(--radius-md); padding: 10px; border: 1px solid var(--card-border); max-height: 300px; overflow-y: auto;">
+                <div style="text-align: center; padding: 30px; color: var(--text-muted);">No readings yet.</div>
+            </div>
+
+            <!-- PROFILE SECTION -->
+            <div class="profile-container" style="margin-top:20px;">
+                <!-- Saved Profile Card -->
+                <div id="profileCard"
+                    style="display:none; background:rgba(255,255,255,0.03); border:1px solid var(--card-border); border-radius:var(--radius-md); padding:20px; margin-bottom:15px; backdrop-filter:blur(5px);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="font-weight:700; color:var(--text-main); font-size:1.1em;">
+                            <span style="color:var(--primary-color);">👤</span> Current Profile
+                        </div>
+                        <button id="deleteProfileBtn"
+                            style="color:var(--heart-color); background:rgba(255, 45, 85, 0.1); border:1px solid rgba(255, 45, 85, 0.2); padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8em; font-weight:700;">Delete</button>
+                    </div>
+                    <div id="profileDetails"
+                        style="margin-top:15px; color:var(--text-muted); font-size:0.95em; line-height:1.6;"></div>
+                </div>
+
+                <!-- Edit/Create Profile Dropdown -->
+                <div class="settings-card"
+                    style="background:var(--card-bg); border:1px solid var(--card-border); border-radius:var(--radius-md); overflow:hidden;">
+                    <div id="profileHeader" onclick="toggleProfileForm()"
+                        style="padding:15px 20px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02);">
+                        <span style="font-weight:700; color:var(--text-main);">Settings & Profile</span>
+                        <svg id="profileChevron" viewBox="0 0 24 24"
+                            style="width:20px; height:20px; fill:none; stroke:var(--text-muted); stroke-width:2; transition:transform 0.3s;">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </div>
+
+                    <div id="profileFormContent"
+                        style="display:none; padding:20px; border-top:1px solid var(--card-border);">
+                        <div style="display:grid; gap:12px;">
+                            <div
+                                style="color:var(--text-muted); font-size:0.8em; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">
+                                User Info</div>
+                            <input type="text" id="userName" placeholder="Full Name" class="glass-input">
+                            <input type="number" id="userAge" placeholder="Age" class="glass-input">
+                            <input type="text" id="userEmergencyContact" placeholder="Emergency Phone"
+                                class="glass-input">
+
+                            <div
+                                style="color:var(--text-muted); font-size:0.8em; text-transform:uppercase; letter-spacing:1px; margin-top:15px;">
+                                Telegram Config</div>
+                            <input type="text" id="telegramBotToken" placeholder="Bot Token" class="glass-input">
+                            <input type="text" id="telegramChatId" placeholder="Chat ID" class="glass-input">
+
+                            <div
+                                style="color:var(--text-muted); font-size:0.8em; text-transform:uppercase; letter-spacing:1px; margin-top:15px;">
+                                WiFi Update</div>
+                            <div
+                                style="background:rgba(255,193,7,0.1); border:1px solid rgba(255,193,7,0.2); padding:10px; border-radius:8px; display:grid; gap:10px;">
+                                <input type="text" id="wifiSSID" placeholder="New Network SSID" class="glass-input">
+                                <input type="password" id="wifiPass" placeholder="New Password" class="glass-input">
+                            </div>
+
+                            <button id="saveProfileBtn"
+                                style="margin-top:10px; padding:12px; background:var(--primary-color); color:white; border:none; width:100%; border-radius:8px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+                                <span>Save & Sync</span>
+                                <svg viewBox="0 0 24 24"
+                                    style="width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2;">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                    <polyline points="7 3 7 8 15 8"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .glass-input {
+                    padding: 12px;
+                    width: 100%;
+                    border-radius: 8px;
+                    border: 1px solid var(--card-border);
+                    background: rgba(255, 255, 255, 0.05);
+                    /* Glassy input */
+                    color: var(--text-main);
+                    outline: none;
+                    transition: all 0.2s;
+                    box-sizing: border-box;
+                    /* Fix padding width issue */
+                }
+
+                .glass-input:focus {
+                    border-color: var(--primary-color);
+                    background: rgba(255, 255, 255, 0.1);
+                }
+            </style>
+
+            <script>
+                function toggleProfileForm() {
+                    const content = document.getElementById('profileFormContent');
+                    const chevron = document.getElementById('profileChevron');
+                    const isHidden = content.style.display === 'none';
+                    content.style.display = isHidden ? 'block' : 'none';
+                    chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+                }
+            </script>
         </div>
 
-        <!-- Reminders Tab (placeholder) -->
+        <!-- Reminders Tab -->
         <div class="tab-content" id="tab-reminders">
-            <div style="background:var(--card-bg); border-radius:20px; padding:20px; text-align:center; color:var(--text-muted);">
-                Reminders coming soon...
+            <div
+                style="background:var(--card-bg); border-radius:var(--radius-md); padding:20px; border:1px solid var(--card-border);">
+                <h3 style="margin-bottom: 20px; font-family: var(--font-data); color: var(--text-main);">Smart Reminders
+                </h3>
+                <div style="display:grid; gap:10px; margin-bottom:20px;">
+                    <input type="time" id="remTime"
+                        style="padding:10px; font-size:1.2em; width:100%; border-radius: var(--radius-sm); border: 1px solid var(--card-border); background: var(--bg-color); color: var(--text-main);">
+                    <div class="type-selector" style="display:flex; gap:10px;">
+                        <input type="hidden" id="remType" value="medication">
+
+                        <!-- Medication SVG (Pill) -->
+                        <div class="type-card selected" onclick="selectReminderType('medication', this)"
+                            style="flex: 1;">
+                            <svg viewBox="0 0 24 24" style="stroke: var(--primary-color); fill:none; stroke-width:1.5;">
+                                <path d="M10.5 20.5l10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
+                                <path d="m8.5 8.5 7 7" />
+                            </svg>
+                            <div style="font-size: 0.7em; font-weight: 700; margin-top: 6px;">Meds</div>
+                        </div>
+
+                        <!-- Exercise SVG (Dumbbell) -->
+                        <div class="type-card" onclick="selectReminderType('exercise', this)" style="flex: 1;">
+                            <svg viewBox="0 0 24 24" style="stroke: var(--env-color); fill:none; stroke-width:1.5;">
+                                <path d="m6.5 6.5 11 11" />
+                                <path d="m21 21-1-1" />
+                                <path d="m3 3 1 1" />
+                                <path d="m18 22 4-4" />
+                                <path d="m2 6 4-4" />
+                                <path d="m3 10 7-7" />
+                                <path d="m14 21 7-7" />
+                            </svg>
+                            <div style="font-size: 0.7em; font-weight: 700; margin-top: 6px;">Exercise</div>
+                        </div>
+
+                        <!-- General SVG (Calendar) -->
+                        <div class="type-card" onclick="selectReminderType('general', this)" style="flex: 1;">
+                            <svg viewBox="0 0 24 24" style="stroke: var(--text-muted); fill: none; stroke-width:1.5;">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            <div style="font-size: 0.7em; font-weight: 700; margin-top: 6px;">General</div>
+                        </div>
+                    </div>
+                    <input type="text" id="remDetail" placeholder="Reminder details..."
+                        style="padding:12px; width:100%; border-radius: var(--radius-sm); border: 1px solid var(--card-border); background: var(--bg-color); color: var(--text-main);">
+                    <button onclick="addReminder()"
+                        style="padding:12px; background:var(--primary-color); color:white; border:none; width:100%; border-radius: var(--radius-sm); font-weight: 700; cursor: pointer; transition: transform 0.2s;">Add
+                        Reminder</button>
+                </div>
+                <ul id="reminderList" style="list-style:none; padding:0;"></ul>
             </div>
         </div>
+
+    </div>
+
+    <!-- Floating Emergency Button -->
+    <button class="emergency-float" onclick="triggerEmergency()">
+        <svg viewBox="0 0 24 24">
+            <path
+                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+        </svg>
+        SOS
+    </button>
+
+    <div class="control-panel">
+        <button class="dock-btn active" id="dock-dashboard" onclick="window.switchTab('dashboard')">
+            <svg class="icon" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            Dashboard
+        </button>
+        <button class="dock-btn" id="dock-history" onclick="window.switchTab('history')">
+            <svg class="icon" viewBox="0 0 24 24">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            History
+        </button>
+        <button class="dock-btn" id="dock-reminders" onclick="window.switchTab('reminders')">
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            Reminders
+        </button>
     </div>
 
     <script>
-        const firebaseConfig = { databaseURL: "https://ella-b927d-default-rtdb.firebaseio.com/" };
+        // FIREBASE CONFIG
+        const firebaseConfig = {
+            databaseURL: "https://ella-b927d-default-rtdb.firebaseio.com/"
+        };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // Connection status
-        const statusEl = document.getElementById('status');
-        database.ref('.info/connected').on('value', (snap) => {
-            statusEl.classList.toggle('status-connected', snap.val());
+        // STATE
+        const state = { connected: false, darkMode: true, readings: [], reminders: [], currentTab: 'dashboard' };
+        const elements = {
+            status: document.getElementById('status'),
+            themeToggle: document.getElementById('themeToggle'),
+            hrVal: document.getElementById('hrVal'),
+            spo2Val: document.getElementById('spo2Val'),
+            bodyTempVal: document.getElementById('bodyTempVal'),
+            envTempVal: document.getElementById('envTempVal'),
+            humidityVal: document.getElementById('humidityVal'),
+            aqiVal: document.getElementById('aqiVal'),
+            eco2Val: document.getElementById('eco2Val'),
+            tvocVal: document.getElementById('tvocVal'),
+            lastUpdate: document.getElementById('lastUpdate'),
+            logList: document.getElementById('logList')
+        };
+
+        // THEME
+        elements.themeToggle.addEventListener('click', () => {
+            state.darkMode = !state.darkMode;
+            document.body.classList.toggle('dark-mode', state.darkMode);
+            localStorage.setItem('darkMode', state.darkMode);
+        });
+        if (localStorage.getItem('darkMode') === 'false') {
+            state.darkMode = false;
+            document.body.classList.remove('dark-mode');
+        }
+
+        // TABS
+        window.switchTab = function (tabName) {
+            state.currentTab = tabName;
+            document.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('active'));
+            const dockBtn = document.getElementById(`dock-${tabName}`);
+            if (dockBtn) dockBtn.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        // REMINDERS
+        window.selectReminderType = function (type, element) {
+            document.getElementById('remType').value = type;
+            document.querySelectorAll('.type-card').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+        }
+        window.addReminder = function () {
+            const time = document.getElementById('remTime').value;
+            const type = document.getElementById('remType').value;
+            const detail = document.getElementById('remDetail').value;
+            if (!time || !detail) return alert('Enter time and details');
+            state.reminders.push({ time, type, detail });
+            renderReminders();
+            saveReminders();
+        }
+        function renderReminders() {
+            const list = document.getElementById('reminderList');
+            list.innerHTML = '';
+
+            if (state.reminders.length === 0) {
+                list.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.9em; opacity: 0.7;">No reminders set.<br>Add one above!</div>';
+                return;
+            }
+
+            state.reminders.forEach((r, idx) => {
+                const li = document.createElement('li');
+                li.style.padding = '16px';
+                li.style.marginBottom = '10px';
+                li.style.borderRadius = 'var(--radius-md)';
+                li.style.background = 'rgba(255, 255, 255, 0.03)';
+                li.style.border = '1px solid var(--card-border)';
+                li.style.display = 'flex';
+                li.style.alignItems = 'center';
+                li.style.gap = '15px';
+                li.style.backdropFilter = 'blur(5px)';
+                li.style.transition = 'transform 0.2s';
+
+                // Premium SVG Icons
+                const iconSvgs = {
+                    medication: '<svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:var(--primary-color);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"><path d="M10.5 20.5l10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>',
+                    exercise: '<svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:var(--env-color);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"><path d="m11 16-5 5"/><path d="M11 21.48a13.68 13.68 0 0 0-3.34-3.34"/><path d="M6 13c-.91-1.4-1.53-2.9-1.85-4.5"/><path d="M5.5 15.5 2 12l1.5-1.5"/><path d="M18 11c1.4-.91 2.9-1.53 4.5-1.85"/><path d="M15.5 5.5 12 2l-1.5 1.5"/><path d="M8.48 5.66a13.68 13.68 0 0 0 3.34 3.34"/><path d="M8 13 3 8"/><path d="M2.5 10.5 10.5 2.5"/><path d="M13 16 8 11"/><path d="m21.5 13.5-8-8"/><path d="M21.5 10.5 13.5 2.5"/></svg>',
+                    general: '<svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:var(--text-muted);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"><path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M10 16h4"/><path d="M12 14v4"/></svg>'
+                };
+
+                li.innerHTML = `
+                    <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:12px; display:flex; align-items:center; justify-content:center;">
+                        ${iconSvgs[r.type] || iconSvgs.general}
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; font-size: 1.15em; color: var(--text-main); margin-bottom: 2px;">${r.time}</div>
+                        <div style="color: var(--text-muted); font-size: 0.9em; font-weight: 500;">${r.detail}</div>
+                    </div>
+                    <button onclick="deleteReminder(${idx})" style="background: rgba(255, 45, 85, 0.1); color: var(--heart-color); border: 1px solid rgba(255, 45, 85, 0.2); padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.85em; font-weight: 700;">✕</button>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        window.deleteReminder = function (index) {
+            state.reminders.splice(index, 1);
+            renderReminders();
+            saveReminders();
+        }
+        function saveReminders() {
+            database.ref('reminders').set(state.reminders);
+            localStorage.setItem('ellaReminders', JSON.stringify(state.reminders));
+        }
+        // Load Reminders
+        const cached = localStorage.getItem('ellaReminders');
+        if (cached) { state.reminders = JSON.parse(cached); renderReminders(); }
+        database.ref('reminders').on('value', snap => {
+            const val = snap.val();
+            if (val) { state.reminders = val; renderReminders(); localStorage.setItem('ellaReminders', JSON.stringify(val)); }
         });
 
-        // DOM elements for values
-        const hrVal = document.getElementById('hrVal');
-        const spo2Val = document.getElementById('spo2Val');
-        const bodyTempVal = document.getElementById('bodyTempVal');
-        const envTempVal = document.getElementById('envTempVal');
-        const humidityVal = document.getElementById('humidityVal');
-        const aqiVal = document.getElementById('aqiVal');
-        const eco2Val = document.getElementById('eco2Val');
-        const tvocVal = document.getElementById('tvocVal');
-        const lastUpdate = document.getElementById('lastUpdate');
-
-        // Chart instances
+        // PREMIUM CHARTS
         let hrChart, spo2Chart, btChart, etChart, humChart, aqiChart;
 
-        // Common chart options
+        // Common Gradient Helper
+        function getGradient(ctx, colorStart, colorEnd) {
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, colorStart);
+            gradient.addColorStop(1, colorEnd);
+            return gradient;
+        }
+
         const commonOptions = {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                x: { type: 'time', time: { unit: 'minute' }, grid: { display: false } },
-                y: { grid: { color: 'rgba(128,128,128,0.1)' } }
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleFont: { family: 'Rajdhani', size: 14 },
+                    bodyFont: { family: 'Rajdhani', size: 14 },
+                    padding: 10,
+                    cornerRadius: 8,
+                    displayColors: false
+                }
             },
-            elements: { point: { radius: 0 } }
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } },
+                    grid: { display: false },
+                    ticks: { color: '#888', font: { family: 'Rajdhani', size: 10 }, maxTicksLimit: 6 }
+                },
+                y: {
+                    grid: { color: 'rgba(128,128,128,0.1)', borderDash: [5, 5] },
+                    ticks: { color: '#888', font: { family: 'Rajdhani', size: 10 } },
+                    border: { display: false }
+                }
+            },
+            elements: {
+                point: { radius: 0, hoverRadius: 6, backgroundColor: '#fff', borderWidth: 2 },
+                line: { tension: 0.4, borderWidth: 3 }
+            },
+            interaction: {
+                mode: 'nearest',
+                intersect: false,
+                axis: 'x'
+            }
         };
 
         function initCharts() {
-            // Heart Rate
+            // 1. Heart Rate (Red)
             const hrCtx = document.getElementById('hrChartCanvas').getContext('2d');
+            const hrGrad = getGradient(hrCtx, 'rgba(255, 45, 85, 0.4)', 'rgba(255, 45, 85, 0.0)');
             hrChart = new Chart(hrCtx, {
                 type: 'line',
-                data: { datasets: [{ label: 'BPM', data: [], borderColor: '#FF2D55', backgroundColor: 'rgba(255,45,85,0.1)' }] },
-                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 40, max: 160 } } }
+                data: {
+                    datasets: [{
+                        label: 'BPM', data: [],
+                        borderColor: '#FF2D55', backgroundColor: hrGrad, fill: true,
+                        pointBorderColor: '#FF2D55'
+                    }]
+                },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 40, max: 160 } } }
             });
 
-            // SpO2
+            // 2. SpO2 (Blue)
             const spo2Ctx = document.getElementById('spo2ChartCanvas').getContext('2d');
+            const spo2Grad = getGradient(spo2Ctx, 'rgba(0, 122, 255, 0.4)', 'rgba(0, 122, 255, 0.0)');
             spo2Chart = new Chart(spo2Ctx, {
                 type: 'line',
-                data: { datasets: [{ label: '%', data: [], borderColor: '#007AFF', backgroundColor: 'rgba(0,122,255,0.1)' }] },
-                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 80, max: 100 } } }
+                data: {
+                    datasets: [{
+                        label: '%', data: [],
+                        borderColor: '#007AFF', backgroundColor: spo2Grad, fill: true,
+                        pointBorderColor: '#007AFF'
+                    }]
+                },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 80, max: 100 } } }
             });
 
-            // Body Temp
+            // 3. Body Temp (Orange)
             const btCtx = document.getElementById('btChartCanvas').getContext('2d');
+            const btGrad = getGradient(btCtx, 'rgba(255, 149, 0, 0.4)', 'rgba(255, 149, 0, 0.0)');
             btChart = new Chart(btCtx, {
                 type: 'line',
-                data: { datasets: [{ label: '°C', data: [], borderColor: '#FF9500', backgroundColor: 'rgba(255,149,0,0.1)' }] },
-                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 30, max: 42 } } }
+                data: {
+                    datasets: [{
+                        label: '°C', data: [],
+                        borderColor: '#FF9500', backgroundColor: btGrad, fill: true,
+                        pointBorderColor: '#FF9500'
+                    }]
+                },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 30, max: 42 } } }
             });
 
-            // Environment Temp
+            // 4. Env Temp (Yellow)
             const etCtx = document.getElementById('etChartCanvas').getContext('2d');
+            const etGrad = getGradient(etCtx, 'rgba(255, 193, 7, 0.4)', 'rgba(255, 193, 7, 0.0)');
             etChart = new Chart(etCtx, {
                 type: 'line',
-                data: { datasets: [{ label: '°C', data: [], borderColor: '#FFC107', backgroundColor: 'rgba(255,193,7,0.1)' }] },
-                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 10, max: 40 } } }
+                data: {
+                    datasets: [{
+                        label: '°C', data: [],
+                        borderColor: '#FFC107', backgroundColor: etGrad, fill: true,
+                        pointBorderColor: '#FFC107'
+                    }]
+                },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 10, max: 40 } } }
             });
 
-            // Humidity
+            // 5. Humidity (Green)
             const humCtx = document.getElementById('humChartCanvas').getContext('2d');
+            const humGrad = getGradient(humCtx, 'rgba(52, 199, 89, 0.4)', 'rgba(52, 199, 89, 0.0)');
             humChart = new Chart(humCtx, {
                 type: 'line',
-                data: { datasets: [{ label: '%', data: [], borderColor: '#34C759', backgroundColor: 'rgba(52,199,89,0.1)' }] },
-                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 0, max: 100 } } }
+                data: {
+                    datasets: [{
+                        label: '%', data: [],
+                        borderColor: '#34C759', backgroundColor: humGrad, fill: true,
+                        pointBorderColor: '#34C759'
+                    }]
+                },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0, max: 100 } } }
             });
 
-            // AQI
+            // 6. AQI (Purple)
             const aqiCtx = document.getElementById('aqiChartCanvas').getContext('2d');
+            const aqiGrad = getGradient(aqiCtx, 'rgba(156, 39, 176, 0.4)', 'rgba(156, 39, 176, 0.0)');
             aqiChart = new Chart(aqiCtx, {
                 type: 'line',
-                data: { datasets: [{ label: 'AQI', data: [], borderColor: '#9C27B0', backgroundColor: 'rgba(156,39,176,0.1)' }] },
-                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 0, max: 5 } } }
+                data: {
+                    datasets: [{
+                        label: 'AQI', data: [],
+                        borderColor: '#9C27B0', backgroundColor: aqiGrad, fill: true,
+                        pointBorderColor: '#9C27B0'
+                    }]
+                },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0, max: 5 } } }
             });
         }
         initCharts();
 
-        // Helper to push data to a chart
-        function pushData(chart, val, time) {
-            if (!chart || val === undefined) return;
-            chart.data.datasets[0].data.push({ x: time, y: val });
-            if (chart.data.datasets[0].data.length > 50) chart.data.datasets[0].data.shift();
-            chart.update('none');
+        // HELPER: Update Dashboard (Text & Charts)
+        function updateDashboard(data) {
+            if (!data) return;
+
+            // 1. Text Values (Existing)
+            if (elements.hrVal) elements.hrVal.textContent = data.heartRate || '--';
+            if (elements.spo2Val) elements.spo2Val.textContent = data.spo2 || '--';
+            if (elements.bodyTempVal) elements.bodyTempVal.textContent = data.bodyTemp ? Number(data.bodyTemp).toFixed(1) : '--';
+            if (elements.envTempVal) elements.envTempVal.textContent = data.temperature ? Number(data.temperature).toFixed(1) : '--';
+            if (elements.humidityVal) elements.humidityVal.textContent = data.humidity ? Math.round(data.humidity) : '--';
+            if (elements.aqiVal) elements.aqiVal.textContent = data.aqi || '--';
+            if (elements.eco2Val) elements.eco2Val.textContent = data.eco2 || '--';
+            if (elements.tvocVal) elements.tvocVal.textContent = data.tvoc || '--';
+
+            if (elements.lastUpdate && data.timestamp) {
+                elements.lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
+            }
+
+            // 2. Chart Header Values (New)
+            if (document.getElementById('hrCurrent')) document.getElementById('hrCurrent').textContent = (data.heartRate || '--') + ' BPM';
+            if (document.getElementById('spo2Current')) document.getElementById('spo2Current').textContent = (data.spo2 || '--') + '%';
+            if (document.getElementById('btCurrent')) document.getElementById('btCurrent').textContent = (data.bodyTemp ? Number(data.bodyTemp).toFixed(1) : '--') + '°C';
+            if (document.getElementById('etCurrent')) document.getElementById('etCurrent').textContent = (data.temperature ? Number(data.temperature).toFixed(1) : '--') + '°C';
+            if (document.getElementById('humCurrent')) document.getElementById('humCurrent').textContent = (data.humidity ? Math.round(data.humidity) : '--') + '%';
+            if (document.getElementById('aqiCurrent')) document.getElementById('aqiCurrent').textContent = (data.aqi || '--');
+
+            // 3. Update Charts
+            const time = data.timestamp || Date.now();
+            const MAX_POINTS = 50;
+
+            function pushData(chart, val) {
+                if (!chart || val === undefined) return;
+                chart.data.datasets[0].data.push({ x: time, y: val });
+                if (chart.data.datasets[0].data.length > MAX_POINTS) {
+                    chart.data.datasets[0].data.shift();
+                }
+                chart.update('none');
+            }
+
+            pushData(hrChart, data.heartRate);
+            pushData(spo2Chart, data.spo2);
+            pushData(btChart, data.bodyTemp);
+            pushData(etChart, data.temperature);
+            pushData(humChart, data.humidity);
+            pushData(aqiChart, data.aqi);
         }
 
-        // Update everything
+        // DATA LISTENER
         database.ref('readings').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
-            const data = snap.val();
-            if (!data) return;
-            const time = data.timestamp || Date.now();
-
-            // Update card values
-            hrVal.textContent = data.heartRate || '--';
-            spo2Val.textContent = data.spo2 || '--';
-            bodyTempVal.textContent = data.bodyTemp ? data.bodyTemp.toFixed(1) : '--';
-            envTempVal.textContent = data.temperature ? data.temperature.toFixed(1) : '--';
-            humidityVal.textContent = data.humidity ? Math.round(data.humidity) : '--';
-            aqiVal.textContent = data.aqi || '--';
-            eco2Val.textContent = data.eco2 || '--';
-            tvocVal.textContent = data.tvoc || '--';
-            if (data.timestamp) lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
-
-            // Update chart headers
-            document.getElementById('hrCurrent').textContent = (data.heartRate || '--') + ' BPM';
-            document.getElementById('spo2Current').textContent = (data.spo2 || '--') + '%';
-            document.getElementById('btCurrent').textContent = (data.bodyTemp ? data.bodyTemp.toFixed(1) : '--') + '°C';
-            document.getElementById('etCurrent').textContent = (data.temperature ? data.temperature.toFixed(1) : '--') + '°C';
-            document.getElementById('humCurrent').textContent = (data.humidity ? Math.round(data.humidity) : '--') + '%';
-            document.getElementById('aqiCurrent').textContent = (data.aqi || '--');
-
-            // Push to charts
-            pushData(hrChart, data.heartRate, time);
-            pushData(spo2Chart, data.spo2, time);
-            pushData(btChart, data.bodyTemp, time);
-            pushData(etChart, data.temperature, time);
-            pushData(humChart, data.humidity, time);
-            pushData(aqiChart, data.aqi, time);
+            updateDashboard(snap.val());
         });
 
-        // Theme toggle
-        const themeToggle = document.getElementById('themeToggle');
-        const body = document.body;
-        let darkMode = localStorage.getItem('darkMode') !== 'false';
-        function setTheme(mode) { body.classList.toggle('dark-mode', mode); localStorage.setItem('darkMode', mode); }
-        themeToggle.addEventListener('click', () => { darkMode = !darkMode; setTheme(darkMode); });
-        setTheme(darkMode);
+        // EMERGENCY BUTTON LOGIC
+        window.triggerEmergency = function () {
+            if (confirm("🚨 ACTIVATE EMERGENCY ALERT?\n\nThis will send a distress message to the configured Telegram contact.")) {
+                database.ref('commands/emergency').set(true);
+                alert("🆘 Emergency Alert Sent!");
+
+                // Auto-reset after 5 seconds to allow re-triggering
+                setTimeout(() => {
+                    database.ref('commands/emergency').set(false);
+                }, 5000);
+            }
+        };
+
+        // PROFILE & WIFI
+        const saveProfileBtn = document.getElementById('saveProfileBtn');
+        const deleteProfileBtn = document.getElementById('deleteProfileBtn');
+
+        function loadProfile() {
+            const cached = localStorage.getItem('ellaUserProfile');
+            if (cached) {
+                const p = JSON.parse(cached);
+
+                // Populate Inputs
+                if (document.getElementById('userName')) document.getElementById('userName').value = p.name || '';
+                if (document.getElementById('userAge')) document.getElementById('userAge').value = p.age || '';
+                if (document.getElementById('userEmergencyContact')) document.getElementById('userEmergencyContact').value = p.emergencyContact || '';
+                if (document.getElementById('telegramBotToken')) document.getElementById('telegramBotToken').value = p.telegramBotToken || '';
+                if (document.getElementById('telegramChatId')) document.getElementById('telegramChatId').value = p.telegramChatId || '';
+
+                // Update Display Card
+                const card = document.getElementById('profileCard');
+                const details = document.getElementById('profileDetails');
+
+                if (p.name) {
+                    card.style.display = 'block';
+                    details.innerHTML = `
+                        <div style="margin-bottom:5px;"><strong style="color:var(--text-main);">${p.name}</strong> <span style="opacity:0.6;">(${p.age || 'N/A'} yrs)</span></div>
+                        <div style="margin-bottom:5px;">📞 ${p.emergencyContact || 'No Contact'}</div>
+                        <div style="opacity:0.6; font-size:0.9em;">Telegram: ${p.telegramChatId ? 'Configured' : 'Not Set'}</div>
+                    `;
+                } else {
+                    card.style.display = 'none';
+                }
+            }
+        }
+
+        // Initial Load
+        loadProfile();
+
+        if (saveProfileBtn) {
+            saveProfileBtn.addEventListener('click', () => {
+                const profile = {
+                    name: document.getElementById('userName').value,
+                    age: document.getElementById('userAge').value,
+                    emergencyContact: document.getElementById('userEmergencyContact').value,
+                    telegramBotToken: document.getElementById('telegramBotToken').value,
+                    telegramChatId: document.getElementById('telegramChatId').value
+                };
+
+                // Save WiFi Config if entered
+                const ssid = document.getElementById('wifiSSID').value;
+                const pass = document.getElementById('wifiPass').value;
+                if (ssid && pass) {
+                    database.ref('commands/wifiConfig').set({
+                        ssid: ssid,
+                        password: pass
+                    });
+                    alert("WiFi Config Sent to ELLA! (Device may reboot)");
+                }
+
+                localStorage.setItem('ellaUserProfile', JSON.stringify(profile));
+                database.ref('commands/userProfile').set(profile);
+                loadProfile(); // Refresh UI
+                alert('Profile Saved & Synced');
+                toggleProfileForm(); // Close form
+            });
+        }
+
+        if (deleteProfileBtn) {
+            deleteProfileBtn.addEventListener('click', () => {
+                if (confirm("Delete this profile?")) {
+                    localStorage.removeItem('ellaUserProfile');
+                    database.ref('commands/userProfile').remove();
+                    document.getElementById('profileCard').style.display = 'none';
+                    // Clear inputs
+                    document.getElementById('userName').value = '';
+                    document.getElementById('userAge').value = '';
+                    document.getElementById('userEmergencyContact').value = '';
+                    document.getElementById('telegramBotToken').value = '';
+                    document.getElementById('telegramChatId').value = '';
+                }
+            });
+        }
     </script>
 </body>
+
 </html>
