@@ -1,4 +1,7 @@
+Step 4 – MAX30102 Fix (5:15 PM Saturday)
+Commit: Fixed MAX30102 I2C address shift, reading raw IR data
 
+cpp
 #include <WiFi.h>
 #include <SPIFFS.h>
 #include <SPI.h>
@@ -64,7 +67,6 @@ void setup() {
 
   pinMode(TACTILE_SWITCH_PIN, INPUT_PULLUP);
 
-  // Initialize AHT20 and ENS160 (unchanged)
   tcaselect(CH_AHT);
   if (!aht.begin()) Serial.println("AHT20 not found!");
   else Serial.println("AHT20 OK");
@@ -77,17 +79,20 @@ void setup() {
     Serial.println("ENS160 OK");
   }
 
-  // MAX30102 with BUG (wrong address)
+  // MAX30102 FIXED
   tcaselect(CH_MAX);
-  Wire.beginTransmission(0xAE);   // ← BUG: 8-bit address
+  Wire.beginTransmission(0x57);
   if (Wire.endTransmission() != 0) {
       Serial.println("MAX30102 NOT DETECTED on I2C!");
   }
 
-  if (!particleSensor.begin(Wire, 0xAE)) {  // ← BUG
+  if (!particleSensor.begin(Wire, 0x57)) {
     Serial.println("MAX30102 not found!");
   } else {
-    Serial.println("MAX30102 OK – placeholder config");
+    Serial.println("MAX30102 OK");
+    particleSensor.setup(0x3C, 8, 3, 100, 411, 4096);
+    particleSensor.setPulseAmplitudeRed(0x3C);
+    particleSensor.setPulseAmplitudeIR(0x3C);
   }
 }
 
@@ -96,5 +101,13 @@ void loop() {
   if (millis() - lastPrint > 2000) {
     Serial.println("Loop alive");
     lastPrint = millis();
+  }
+
+  static unsigned long lastIR = 0;
+  if (millis() - lastIR > 1000) {
+    tcaselect(CH_MAX);
+    long ir = particleSensor.getIR();
+    Serial.printf("IR value: %ld\n", ir);
+    lastIR = millis();
   }
 }
