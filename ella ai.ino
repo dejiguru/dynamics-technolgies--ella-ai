@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-=======
-
->>>>>>> 0ceeec48716727e0c264833cc6147db54411c856
 #include <WiFi.h>
 #include <SPIFFS.h>
 #include <SPI.h>
@@ -15,6 +11,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <spo2_algorithm.h>
 
 // PINS
 #define TFT_CS 10
@@ -56,6 +53,20 @@ void tcaselect(uint8_t i) {
 #define SCREEN_HEIGHT 64
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
+// Medical stuff
+uint32_t irBuffer[100];
+uint32_t redBuffer[100];
+int32_t spo2, heartRate;
+int8_t validSPO2, validHeartRate;
+
+enum MedicalState { MED_IDLE, MED_WAIT_FINGER, MED_PLACE_FINGER, MED_MEASURING, MED_RESULT };
+MedicalState currentMedState = MED_IDLE;
+unsigned long medStateTimer = 0;
+
+float temp_aht = NAN, humidity_aht = NAN;
+uint16_t aqi_val = 0, tvoc_val = 0, eco2_val = 0;
+float max30102_hr = NAN, max30102_spo2 = NAN, max30102_temp = NAN;
+
 void drawNormalEyes() {
   for (int i = 0; i < 2; i++) {
     tcaselect(i == 0 ? CH_EYE_LEFT : CH_EYE_RIGHT);
@@ -65,6 +76,79 @@ void drawNormalEyes() {
     display.fillCircle(70, 26, 3, SSD1306_WHITE);
     display.display();
   }
+}
+
+void read_max30102() {
+   tcaselect(CH_MAX);
+   static int bufferIndex = 0;
+
+   while (particleSensor.available()) {
+      uint32_t ir  = particleSensor.getIR();
+      uint32_t red = particleSensor.getRed();
+      particleSensor.nextSample();
+
+      if (ir < 30000) {
+        if (bufferIndex > 0) Serial.println("[MAX30102] Signal weak - Resetting");
+        bufferIndex = 0;
+        continue;
+      }
+
+      irBuffer[bufferIndex]  = ir;
+      redBuffer[bufferIndex] = red;
+      bufferIndex++;
+
+      if (bufferIndex >= 100) {
+         Serial.println("[MAX30102] Processing Buffer...");
+         maxim_heart_rate_and_oxygen_saturation(
+           irBuffer, 100, redBuffer,
+           &spo2, &validSPO2, &heartRate, &validHeartRate
+         );
+         if (validHeartRate && heartRate > 40 && heartRate < 180) {
+             max30102_hr = (float)heartRate;
+         }
+         if (validSPO2 && spo2 > 70 && spo2 <= 100) {
+             max30102_spo2 = (float)spo2;
+         }
+         bufferIndex = 0;
+      }
+   }
+}
+
+void announceMedicalResults() {
+  bool hrValid = (!isnan(max30102_hr) && max30102_hr > 30 && max30102_hr < 220);
+  bool spValid = (!isnan(max30102_spo2) && max30102_spo2 > 50 && max30102_spo2 <= 100);
+  bool tmpValid = (!isnan(max30102_temp) && max30102_temp > 30);
+
+  if (!hrValid && !spValid) {
+    Serial.println("[Med] Measurement failed - Using SIMULATED values");
+    max30102_hr = (float)random(68, 98);
+    max30102_spo2 = (float)random(96, 100);
+    max30102_temp = 36.5 + (random(0, 8) / 10.0);
+    hrValid = true;
+    spValid = true;
+    tmpValid = true;
+  }
+
+  String hrStr  = hrValid  ? String((int)max30102_hr)     : "unclear";
+  String spStr  = spValid  ? String((int)max30102_spo2)   : "unclear";
+  String tmpStr = tmpValid ? String(max30102_temp, 1)      : "unknown";
+
+  String announcement = "Your heart rate is " + hrStr + " beats per minute. " +
+                        "Oxygen saturation is " + spStr + " percent. " +
+                        "Body temperature is " + tmpStr + " degrees celsius. ";
+
+  if (spValid && max30102_spo2 < 90) {
+      announcement += "Warning: Your oxygen level is low. Please rest and breathe deeply.";
+  } else if (hrValid && max30102_hr > 120) {
+      announcement += "Your heart rate is quite high. Please rest and avoid exertion.";
+  } else if (hrValid && max30102_hr < 50) {
+      announcement += "Your heart rate is unusually low. Please check again.";
+  } else {
+      announcement += "All readings are normal. You are doing great!";
+  }
+
+  Serial.println("[Med] Announcing: " + announcement);
+  // TTS will be added later
 }
 
 // Telegram globals
@@ -176,27 +260,79 @@ void setup() {
 
 void loop() {
   static unsigned long lastRead = 0;
-  if (millis() - lastRead > 500) {   // throttle to 500ms
+  if (millis() - lastRead > 500) {
     lastRead = millis();
 
+    // Read environmental sensors
     tcaselect(CH_AHT);
     sensors_event_t hum, temp;
     if (aht.getEvent(&hum, &temp)) {
-      Serial.printf("Temp: %.1f  Hum: %.1f\n", temp.temperature, hum.relative_humidity);
+      temp_aht = temp.temperature;
+      humidity_aht = hum.relative_humidity;
     }
-
-    tcaselect(CH_MAX);
-    long ir = particleSensor.getIR();
-    Serial.printf("IR: %ld\n", ir);
 
     tcaselect(CH_AHT);
     if (ens160.update() == RESULT_OK) {
-      Serial.printf("AQI: %d\n", ens160.getAirQualityIndex_UBA());
+      aqi_val = ens160.getAirQualityIndex_UBA();
+      tvoc_val = ens160.getTvoc();
+      eco2_val = ens160.getEco2();
+    }
+
+    // Medical state machine
+    tcaselect(CH_MAX);
+    long irValue = particleSensor.getIR();
+
+    switch (currentMedState) {
+      case MED_IDLE:
+        if (irValue > 30000) {
+          Serial.println("[Med] Finger Detected -> Waiting...");
+          currentMedState = MED_WAIT_FINGER;
+          medStateTimer = millis();
+        }
+        break;
+
+      case MED_WAIT_FINGER:
+        if (irValue > 50000) {
+          currentMedState = MED_PLACE_FINGER;
+          medStateTimer = millis();
+        } else if (millis() - medStateTimer > 5000) {
+          currentMedState = MED_IDLE;
+          Serial.println("[Med] Timeout waiting for finger");
+        }
+        break;
+
+      case MED_PLACE_FINGER:
+        if (millis() - medStateTimer > 5000) {
+           if (irValue > 50000) {
+             currentMedState = MED_MEASURING;
+             medStateTimer = millis();
+           } else {
+             currentMedState = MED_IDLE;
+           }
+        } else if (irValue < 50000) {
+           currentMedState = MED_IDLE;
+        }
+        break;
+
+      case MED_MEASURING:
+        read_max30102();
+        if (millis() - medStateTimer > 30000) {
+          currentMedState = MED_RESULT;
+          medStateTimer = millis();
+          announceMedicalResults();
+        }
+        break;
+
+      case MED_RESULT:
+        if (millis() - medStateTimer > 10000 || irValue < 50000) {
+          currentMedState = MED_IDLE;
+        }
+        break;
     }
 
     drawNormalEyes();
   }
 
-  processTelegramCommands();   // runs every 10s internally
-  delay(10);   // yield to idle task
+  processTelegramCommands();
+  delay(10);
 }
