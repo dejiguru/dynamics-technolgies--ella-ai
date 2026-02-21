@@ -269,15 +269,66 @@
             </div>
         </div>
 
-        <!-- History Tab (new) -->
+        <!-- History Tab with all charts (now using correct canvas IDs) -->
         <div class="tab-content" id="tab-history">
+            <!-- Heart Rate Chart -->
             <div class="chart-container">
                 <div class="chart-header">
                     <span style="color: var(--heart-color);">Heart Rate</span>
                     <span id="hrCurrent">--</span>
                 </div>
                 <div style="height:160px;">
-                    <canvas id="hrChart"></canvas>
+                    <canvas id="hrChartCanvas"></canvas>   <!-- ✅ fixed ID -->
+                </div>
+            </div>
+            <!-- SpO2 Chart -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <span style="color: var(--oxy-color);">SpO2 Levels</span>
+                    <span id="spo2Current">--</span>
+                </div>
+                <div style="height:160px;">
+                    <canvas id="spo2ChartCanvas"></canvas>
+                </div>
+            </div>
+            <!-- Body Temp Chart -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <span style="color: var(--temp-color);">Body Temperature</span>
+                    <span id="btCurrent">--</span>
+                </div>
+                <div style="height:160px;">
+                    <canvas id="btChartCanvas"></canvas>
+                </div>
+            </div>
+            <!-- Environment Temp Chart -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <span style="color: #FFC107;">Room Temp</span>
+                    <span id="etCurrent">--</span>
+                </div>
+                <div style="height:160px;">
+                    <canvas id="etChartCanvas"></canvas>
+                </div>
+            </div>
+            <!-- Humidity Chart -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <span style="color: var(--env-color);">Humidity</span>
+                    <span id="humCurrent">--</span>
+                </div>
+                <div style="height:160px;">
+                    <canvas id="humChartCanvas"></canvas>
+                </div>
+            </div>
+            <!-- AQI Chart -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <span style="color: #9C27B0;">Air Quality (AQI)</span>
+                    <span id="aqiCurrent">--</span>
+                </div>
+                <div style="height:160px;">
+                    <canvas id="aqiChartCanvas"></canvas>
                 </div>
             </div>
         </div>
@@ -312,40 +363,87 @@
         const tvocVal = document.getElementById('tvocVal');
         const lastUpdate = document.getElementById('lastUpdate');
 
-        // Chart variables
-        let hrChart;
+        // Chart instances
+        let hrChart, spo2Chart, btChart, etChart, humChart, aqiChart;
 
-        // Chart initialization
+        // Common chart options
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { type: 'time', time: { unit: 'minute' }, grid: { display: false } },
+                y: { grid: { color: 'rgba(128,128,128,0.1)' } }
+            },
+            elements: { point: { radius: 0 } }
+        };
+
         function initCharts() {
-            const ctx = document.getElementById('hrChart').getContext('2d');
-            hrChart = new Chart(ctx, {
+            // Heart Rate
+            const hrCtx = document.getElementById('hrChartCanvas').getContext('2d');
+            hrChart = new Chart(hrCtx, {
                 type: 'line',
-                data: {
-                    datasets: [{
-                        label: 'BPM',
-                        data: [],
-                        borderColor: '#FF2D55',
-                        backgroundColor: 'rgba(255,45,85,0.1)',
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { type: 'time', time: { unit: 'minute' } },
-                        y: { min: 40, max: 160 }
-                    }
-                }
+                data: { datasets: [{ label: 'BPM', data: [], borderColor: '#FF2D55', backgroundColor: 'rgba(255,45,85,0.1)' }] },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 40, max: 160 } } }
+            });
+
+            // SpO2
+            const spo2Ctx = document.getElementById('spo2ChartCanvas').getContext('2d');
+            spo2Chart = new Chart(spo2Ctx, {
+                type: 'line',
+                data: { datasets: [{ label: '%', data: [], borderColor: '#007AFF', backgroundColor: 'rgba(0,122,255,0.1)' }] },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 80, max: 100 } } }
+            });
+
+            // Body Temp
+            const btCtx = document.getElementById('btChartCanvas').getContext('2d');
+            btChart = new Chart(btCtx, {
+                type: 'line',
+                data: { datasets: [{ label: '°C', data: [], borderColor: '#FF9500', backgroundColor: 'rgba(255,149,0,0.1)' }] },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 30, max: 42 } } }
+            });
+
+            // Environment Temp
+            const etCtx = document.getElementById('etChartCanvas').getContext('2d');
+            etChart = new Chart(etCtx, {
+                type: 'line',
+                data: { datasets: [{ label: '°C', data: [], borderColor: '#FFC107', backgroundColor: 'rgba(255,193,7,0.1)' }] },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 10, max: 40 } } }
+            });
+
+            // Humidity
+            const humCtx = document.getElementById('humChartCanvas').getContext('2d');
+            humChart = new Chart(humCtx, {
+                type: 'line',
+                data: { datasets: [{ label: '%', data: [], borderColor: '#34C759', backgroundColor: 'rgba(52,199,89,0.1)' }] },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 0, max: 100 } } }
+            });
+
+            // AQI
+            const aqiCtx = document.getElementById('aqiChartCanvas').getContext('2d');
+            aqiChart = new Chart(aqiCtx, {
+                type: 'line',
+                data: { datasets: [{ label: 'AQI', data: [], borderColor: '#9C27B0', backgroundColor: 'rgba(156,39,176,0.1)' }] },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, y: { min: 0, max: 5 } } }
             });
         }
         initCharts();
 
-        // Update dashboard with new data
+        // Helper to push data to a chart
+        function pushData(chart, val, time) {
+            if (!chart || val === undefined) return;
+            chart.data.datasets[0].data.push({ x: time, y: val });
+            if (chart.data.datasets[0].data.length > 50) chart.data.datasets[0].data.shift();
+            chart.update('none');
+        }
+
+        // Update everything
         database.ref('readings').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
             const data = snap.val();
             if (!data) return;
+            const time = data.timestamp || Date.now();
 
+            // Update card values
             hrVal.textContent = data.heartRate || '--';
             spo2Val.textContent = data.spo2 || '--';
             bodyTempVal.textContent = data.bodyTemp ? data.bodyTemp.toFixed(1) : '--';
@@ -354,20 +452,23 @@
             aqiVal.textContent = data.aqi || '--';
             eco2Val.textContent = data.eco2 || '--';
             tvocVal.textContent = data.tvoc || '--';
+            if (data.timestamp) lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
 
-            if (data.timestamp) {
-                lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
-            }
-
-            // Update chart header
+            // Update chart headers
             document.getElementById('hrCurrent').textContent = (data.heartRate || '--') + ' BPM';
+            document.getElementById('spo2Current').textContent = (data.spo2 || '--') + '%';
+            document.getElementById('btCurrent').textContent = (data.bodyTemp ? data.bodyTemp.toFixed(1) : '--') + '°C';
+            document.getElementById('etCurrent').textContent = (data.temperature ? data.temperature.toFixed(1) : '--') + '°C';
+            document.getElementById('humCurrent').textContent = (data.humidity ? Math.round(data.humidity) : '--') + '%';
+            document.getElementById('aqiCurrent').textContent = (data.aqi || '--');
 
-            // Push to chart
-            if (hrChart && data.heartRate && data.timestamp) {
-                hrChart.data.datasets[0].data.push({ x: data.timestamp, y: data.heartRate });
-                if (hrChart.data.datasets[0].data.length > 50) hrChart.data.datasets[0].data.shift();
-                hrChart.update('none');
-            }
+            // Push to charts
+            pushData(hrChart, data.heartRate, time);
+            pushData(spo2Chart, data.spo2, time);
+            pushData(btChart, data.bodyTemp, time);
+            pushData(etChart, data.temperature, time);
+            pushData(humChart, data.humidity, time);
+            pushData(aqiChart, data.aqi, time);
         });
 
         // Theme toggle
