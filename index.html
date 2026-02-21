@@ -247,8 +247,8 @@
         const envTempVal = document.getElementById('envTempVal');
         const humidityVal = document.getElementById('humidityVal');
         const aqiVal = document.getElementById('aqiVal');
-        const lastUpdate = document.getElementById('lastUpdate');
-        database.ref('sensors').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
+        const lastUpdate = document.getElementById('lastUpdate');                            ]
+        database.ref('readings').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
             const data = snap.val();
             if (!data) return;
 
