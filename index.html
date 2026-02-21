@@ -76,5 +76,23 @@
 
     <header class="app-header">E.L.L.A <span>CLOUD</span></header>
     <div class="main-content"></div>
+
+    <script>
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        let darkMode = localStorage.getItem('darkMode') !== 'false';
+
+        function setTheme(mode) {
+            body.classList.toggle('dark-mode', mode);
+            localStorage.setItem('darkMode', mode);
+        }
+
+        themeToggle.addEventListener('click', () => {
+            darkMode = !darkMode;
+            setTheme(darkMode);
+        });
+
+        setTheme(darkMode);
+    </script>
 </body>
 </html>
