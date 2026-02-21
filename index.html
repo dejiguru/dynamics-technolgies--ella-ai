@@ -269,6 +269,7 @@
             </div>
         </div>
 
+        <!-- History Tab (new) -->
         <div class="tab-content" id="tab-history">
             <div class="chart-container">
                 <div class="chart-header">
@@ -276,7 +277,7 @@
                     <span id="hrCurrent">--</span>
                 </div>
                 <div style="height:160px;">
-                    <canvas id="hrChartCanvas"></canvas>
+                    <canvas id="hrChart"></canvas>
                 </div>
             </div>
         </div>
@@ -314,7 +315,7 @@
         // Chart variables
         let hrChart;
 
-        // Chart initialization (buggy – using wrong canvas ID)
+        // Chart initialization
         function initCharts() {
             const ctx = document.getElementById('hrChart').getContext('2d');
             hrChart = new Chart(ctx, {
