@@ -1,12 +1,13 @@
 
-
-cpp
 #include <WiFi.h>
 #include <SPIFFS.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
 #include <Wire.h>
+#include <Adafruit_AHTX0.h>
+#include <ScioSense_ENS16x.h>
+#include <MAX30105.h>
 
 // PINS
 #define TFT_CS 10
@@ -23,12 +24,29 @@ const char* password = "12345678";
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
+// Sensor objects
+Adafruit_AHTX0 aht;
+ENS160 ens160;
+MAX30105 particleSensor;
+
+// TCA9548A multiplexer
+#define TCA_ADDR 0x70
+#define CH_AHT  2
+#define CH_ENS  2   // same as AHT
+#define CH_MAX  4
+
+void tcaselect(uint8_t i) {
+  if (i > 7) return;
+  Wire.beginTransmission(TCA_ADDR);
+  Wire.write(1 << i);
+  Wire.endTransmission();
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
   Serial.println("EllaBox Starting...");
 
-  // Init SPI and TFT
   SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
   tft.begin(20000000);
   tft.setRotation(0);
@@ -37,16 +55,40 @@ void setup() {
   tft.setCursor(20, 150);
   tft.print("ELLA BOOTING...");
 
-  // WiFi (non-blocking)
   WiFi.setSleep(false);
   WiFi.begin(ssid, password);
   Serial.println("WiFi Started...");
 
-  // I2C
-  Wire.begin(8, 9);  // SDA=8, SCL=9
+  Wire.begin(8, 9);
   Serial.println("I2C Started");
 
   pinMode(TACTILE_SWITCH_PIN, INPUT_PULLUP);
+
+  // Initialize AHT20 and ENS160 (unchanged)
+  tcaselect(CH_AHT);
+  if (!aht.begin()) Serial.println("AHT20 not found!");
+  else Serial.println("AHT20 OK");
+
+  tcaselect(CH_AHT);
+  ens160.begin(&Wire, 0x53);
+  if (!ens160.init()) Serial.println("ENS160 not found!");
+  else {
+    ens160.startStandardMeasure();
+    Serial.println("ENS160 OK");
+  }
+
+  // MAX30102 with BUG (wrong address)
+  tcaselect(CH_MAX);
+  Wire.beginTransmission(0xAE);   // ← BUG: 8-bit address
+  if (Wire.endTransmission() != 0) {
+      Serial.println("MAX30102 NOT DETECTED on I2C!");
+  }
+
+  if (!particleSensor.begin(Wire, 0xAE)) {  // ← BUG
+    Serial.println("MAX30102 not found!");
+  } else {
+    Serial.println("MAX30102 OK – placeholder config");
+  }
 }
 
 void loop() {
@@ -56,4 +98,3 @@ void loop() {
     lastPrint = millis();
   }
 }
-void loop() 
