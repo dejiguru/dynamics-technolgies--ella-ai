@@ -239,6 +239,30 @@
         function setTheme(mode) { body.classList.toggle('dark-mode', mode); localStorage.setItem('darkMode', mode); }
         themeToggle.addEventListener('click', () => { darkMode = !darkMode; setTheme(darkMode); });
         setTheme(darkMode);
+
+        // DOM elements for sensor values
+        const hrVal = document.getElementById('hrVal');
+        const spo2Val = document.getElementById('spo2Val');
+        const bodyTempVal = document.getElementById('bodyTempVal');
+        const envTempVal = document.getElementById('envTempVal');
+        const humidityVal = document.getElementById('humidityVal');
+        const aqiVal = document.getElementById('aqiVal');
+        const lastUpdate = document.getElementById('lastUpdate');
+        database.ref('sensors').orderByChild('timestamp').limitToLast(1).on('child_added', (snap) => {
+            const data = snap.val();
+            if (!data) return;
+
+            hrVal.textContent = data.heartRate || '--';
+            spo2Val.textContent = data.spo2 || '--';
+            bodyTempVal.textContent = data.bodyTemp ? data.bodyTemp.toFixed(1) : '--';
+            envTempVal.textContent = data.temperature ? data.temperature.toFixed(1) : '--';
+            humidityVal.textContent = data.humidity ? Math.round(data.humidity) : '--';
+            aqiVal.textContent = data.aqi || '--';
+
+            if (data.timestamp) {
+                lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
+            }
+        });
     </script>
 </body>
 </html>
