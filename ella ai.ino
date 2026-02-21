@@ -20,6 +20,7 @@
 #include <Preferences.h>
 #include <WebSocketsClient.h>
 #include <ESP_I2S.h>
+#include <Audio.h>
 
 // PINS
 #define TFT_CS 10
@@ -32,21 +33,23 @@
 #define I2S_MIC_SCK 15
 #define I2S_MIC_WS  7
 #define I2S_MIC_SD  4
+#define SPK_BCLK 48
+#define SPK_LRC  21
+#define SPK_DOUT 18
 
-// WiFi
+
 const char* ssid = "ella";
-const char* password = "12345678";
-
-// Firebase
+const char* password = "12345679";
 const char* FIREBASE_HOST = "ella-b927d-default-rtdb.firebaseio.com";
 const char* FIREBASE_DATABASE_URL = "https://ella-b927d-default-rtdb.firebaseio.com";
 const char* FIREBASE_AUTH = "AIzaSyC_yLxDXOqJMY6WB34vxVHe9JP-457kcvI";
 const char* FIREBASE_DB_SECRET = "6p1xNhaN0ZAYJ4Ouy4iKTW3MujgYm8ji71pYzWOZ";
 
-// Deepgram & Groq
-const char* DEEPGRAM_KEY = "983ce7a94c3e617a80f52b74d60212c95a353c01";
-const char* GROQ_KEY = "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";
-//API ARE HARDCODED FOR TRANSPARENCY//
+
+char* DEEPGRAM_KEY = "983ce7a94c3e617a80f52b74d60212c95a353c01";
+char* GROQ_KEY = "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";
+char* SERPER_KEY = "fea12f5e645599a7ee78aaf7ae2d0dafa74ce92e";
+
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
 // Sensor objects
@@ -122,7 +125,7 @@ WebSocketsClient webSocket;
 bool sttConnected = false;
 bool isConnectingSTT = false;
 bool isProcessingAI = false;
-bool isSpeaking = false; // will be used later for TTS
+bool isSpeaking = false;
 
 I2SClass mic_i2s;
 int16_t* sBuffer = nullptr;
@@ -131,8 +134,8 @@ const float DC_ALPHA = 0.001;
 #define GAIN_BOOSTER_I2S 18
 #define BUFFER_LEN 512
 
+Audio audio;
 String conversationHistory = "";
-String currentEyeExpression = "NORMAL"; // for eye animations (placeholder)
 
 // Forward declarations
 void drawNormalEyes();
@@ -167,6 +170,17 @@ String getGroqResponse(String systemPrompt, String userText);
 void drawAIScreen(bool force = false);
 void setEyeExpression(String expr);
 void updateEyes();
+void speakText(const char* text);
+void playMusic(String query);
+String performWebSearch(String query);
+struct SongResult { String title; String author; String audioUrl; bool found; };
+SongResult searchSaavnSong(String query);
+void audio_eof_speech(const char* info);
+void audio_eof_mp3(const char* info);
+void audio_info(const char *info);
+void audio_error(const char *info);
+void clearAIResponse();
+void animateEyesWhileSpeaking();
 
 // ========== UI Functions ==========
 void drawNormalEyes() {
@@ -632,7 +646,7 @@ void announceMedicalResults() {
   bool spValid = (!isnan(max30102_spo2) && max30102_spo2 > 50 && max30102_spo2 <= 100);
   bool tmpValid = (!isnan(max30102_temp) && max30102_temp > 30);
   if (!hrValid && !spValid) {
-    Serial.println("[Med] Measurement failed - Using SIMULATED values");
+    Serial.println("[");
     max30102_hr = (float)random(68, 98);
     max30102_spo2 = (float)random(96, 100);
     max30102_temp = 36.5 + (random(0, 8) / 10.0);
@@ -649,7 +663,7 @@ void announceMedicalResults() {
   else if (hrValid && max30102_hr < 50) announcement += "Your heart rate is unusually low. Please check again.";
   else announcement += "All readings are normal. You are doing great!";
   Serial.println("[Med] Announcing: " + announcement);
-  // TTS will be added in Step 12b
+  if (currentMode == MODE_NORMAL) speakText(announcement.c_str());
 }
 
 // ========== Firebase Functions ==========
@@ -945,8 +959,12 @@ void handleSTTResponse(char* json) {
   if (error) return;
   const char* type = doc["type"];
   if (type && strcmp(type, "SpeechStarted") == 0) {
-    // No TTS yet, so just log
-    Serial.println("[Deepgram] Speech started");
+    if (isSpeaking || audio.isRunning()) {
+      Serial.println("[Deepgram] User interrupted AI");
+      currentInterimText = ""; drawAIScreen(true);
+      if (audio.isRunning()) audio.stopSong();
+      isSpeaking = false;
+    }
     return;
   }
   bool isFinal = doc["is_final"] | false;
@@ -1008,14 +1026,29 @@ void askGroq(const char* userText) {
   String reply = getGroqResponse(baseSystem, userText);
   if (reply == "" || reply == "Error") reply = "[NORMAL] Sorry, network glitch. Try again.";
   
-  // Handle commands (simplified for now, just log)
-  if (reply.indexOf("SEARCH:") >= 0) {
-    Serial.println("[Command] Search requested (not implemented yet)");
-  } else if (reply.indexOf("PLAYSONG:") >= 0 || reply.indexOf("[PLAY:") >= 0) {
-    Serial.println("[Command] Play music requested (not implemented yet)");
+  // Handle commands
+  String cmd = "", param = "";
+  if (reply.indexOf("SEARCH:") >= 0) { cmd = "SEARCH"; param = reply.substring(reply.indexOf("SEARCH:") + 7); }
+  else if (reply.indexOf("PLAYSONG:") >= 0) { cmd = "PLAYSONG"; param = reply.substring(reply.indexOf("PLAYSONG:") + 9); }
+  else if (reply.indexOf("[PLAY:") >= 0) { cmd = "PLAYSONG"; param = reply.substring(reply.indexOf("[PLAY:") + 6); }
+  param.replace("]", ""); param.trim();
+  if (cmd.length() > 0) Serial.println("[Command] Type: " + cmd + ", Param: " + param);
+  
+  if (cmd == "SEARCH" && param.length() > 0) {
+    speakText("Searching online...");
+    unsigned long st = millis(); while(millis() - st < 2500) { audio.loop(); yield(); }
+    String searchResult = performWebSearch(param);
+    String followUp = baseSystem + "\n\n[SYSTEM] A search was just completed for '" + param + "'.\n[RESULT] " + searchResult + "\n[INSTRUCTION] Answer the user's question using the RESULT above. Do NOT use the [SEARCH] command again. Be helpful.";
+    reply = getGroqResponse(followUp, userText);
+  } else if (cmd == "PLAY" || cmd == "PLAYSONG") {
+    if(param.length() > 0) {
+      speakText(("Playing " + param).c_str());
+      delay(300); playMusic(param);
+      return;
+    }
   }
   
-  // Set emotion and show on screen
+  // Set emotion and speak
   if (reply.indexOf("[HAPPY]") >= 0) setEyeExpression("HAPPY");
   else if (reply.indexOf("[SAD]") >= 0) setEyeExpression("SAD");
   else if (reply.indexOf("[THINKING]") >= 0) setEyeExpression("THINKING");
@@ -1026,16 +1059,12 @@ void askGroq(const char* userText) {
   else if (reply.indexOf("[EXCITED]") >= 0) setEyeExpression("EXCITED");
   else setEyeExpression("NORMAL");
   
-  // Show response on screen (no TTS yet)
-  currentInterimText = reply;
-  drawAIScreen(true);
+  speakText(reply.c_str());
   Serial.println("[AI]: " + reply);
   
   String newTurn = "User: " + String(userText) + "\nAI: " + reply + "\n";
   conversationHistory += newTurn;
   if (conversationHistory.length() > 600) conversationHistory = conversationHistory.substring(conversationHistory.length() - 600);
-  
-  isProcessingAI = false;
 }
 
 void drawAIScreen(bool force) {
@@ -1122,6 +1151,9 @@ void setEyeExpression(String expr) {
   updateEyes();
 }
 
+// Eye expression variable (needs to be defined)
+String currentEyeExpression = "NORMAL";
+
 void updateEyes() {
   // Simplified for now – will be expanded in Step 12c
   static unsigned long lastBlink = 0;
@@ -1137,6 +1169,104 @@ String getSensorContext() {
   s += "eCO2: " + String(eco2_val) + " ppm\n";
   if (!isnan(max30102_hr)) { s += "Heart Rate: " + String(max30102_hr, 0) + " BPM\n"; s += "SpO2: " + String(max30102_spo2, 0) + "%\n"; }
   return s;
+}
+
+// ========== TTS & Music ==========
+void speakText(const char* text) {
+  String t = text;
+  t.replace("\n", " ");
+  t.replace("[NORMAL]", ""); t.replace("[THINKING]", ""); t.replace("[HAPPY]", "");
+  t.replace("[SAD]", ""); t.replace("[SEARCH:", ""); t.replace("[LOVE]", "");
+  t.replace("[WINK]", ""); t.replace("[X_X]", ""); t.replace("[SUSPICIOUS]", "");
+  t.replace("[EXCITED]", ""); t.replace("[DEAD]", "");
+  t.trim();
+  if (t.length() == 0) { isProcessingAI = false; return; }
+  if (t.length() > 200) {
+      int lastPeriod = t.lastIndexOf('.', 200);
+      if (lastPeriod > 50) t = t.substring(0, lastPeriod + 1);
+      else t = t.substring(0, 200);
+  }
+  if (currentMode == MODE_AI) { currentInterimText = t; drawAIScreen(); }
+  isSpeaking = true;
+  mic_i2s.end();
+  audio.setVolume(21);
+  audio.connecttospeech(t.c_str(), "en");
+}
+
+void audio_eof_speech(const char* info) {
+  isSpeaking = false; isProcessingAI = false; setEyeExpression("NORMAL");
+  currentInterimText = ""; if (currentMode == MODE_AI) drawAIScreen(true);
+  if (currentMode == MODE_AI) {
+      mic_i2s.setPins(I2S_MIC_SCK, I2S_MIC_WS, -1, I2S_MIC_SD);
+      mic_i2s.begin(I2S_MODE_STD, 16000, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO, I2S_STD_SLOT_LEFT);
+      for (int i = 0; i < 1000; i++) mic_i2s.read();
+  }
+}
+
+void audio_eof_mp3(const char* info) {
+  isSpeaking = false; isProcessingAI = false;
+  mic_i2s.setPins(I2S_MIC_SCK, I2S_MIC_WS, -1, I2S_MIC_SD);
+  mic_i2s.begin(I2S_MODE_STD, 16000, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO, I2S_STD_SLOT_LEFT);
+  for (int i = 0; i < 1000; i++) mic_i2s.read();
+}
+
+void audio_info(const char *info) { Serial.print("[Audio] "); Serial.println(info); }
+void audio_error(const char *info) { isSpeaking = false; isProcessingAI = false; }
+
+void playMusic(String query) {
+  query.toLowerCase();
+  String url = "";
+  if (query.indexOf("lofi") >= 0) url = "http://stream.zeno.fm/0r0xa792kwzuv";
+  else if (query.indexOf("jazz") >= 0) url = "http://airspectrum.cdnstream1.com:8114/1648_128";
+  else if (query.indexOf("pop") >= 0) url = "http://icecast.omroep.nl/3fm-bb-mp3";
+  else if (query.indexOf("rock") >= 0) url = "http://stream.srg-ssr.ch/m/rsj/mp3_128";
+  else if (query.indexOf("hiphop") >= 0 || query.indexOf("hip hop") >= 0 || query.indexOf("rap") >= 0) url = "http://us4.internet-radio.com:8266/stream";
+  else if (query.indexOf("edm") >= 0 || query.indexOf("electronic") >= 0 || query.indexOf("dance") >= 0) url = "http://stream.zeno.fm/f3wvbbqmdg8uv";
+  else if (query.indexOf("country") >= 0) url = "http://us5.internet-radio.com:8119/stream";
+  else if (query.indexOf("classical") >= 0) url = "http://stream.srg-ssr.ch/m/rsc_de/mp3_128";
+  else if (query.indexOf("chill") >= 0 || query.indexOf("relax") >= 0) url = "http://stream.zeno.fm/0r0xa792kwzuv";
+  else { Serial.println("[Music] Unknown genre, defaulting to Lofi Radio."); url = "http://stream.zeno.fm/0r0xa792wwzuv"; }
+  isProcessingAI = false; isSpeaking = true;
+  if (sttConnected) { webSocket.disconnect(); sttConnected = false; }
+  mic_i2s.end();
+  audio.setConnectionTimeout(3000, 8000); audio.forceMono(true); audio.setVolume(21);
+  audio.connecttohost(url.c_str());
+}
+
+String performWebSearch(String query) {
+  Serial.printf("[Search] Query: '%s'\n", query.c_str());
+  query.toLowerCase();
+  struct tm timeinfo; String timeStr = "unknown";
+  if(getLocalTime(&timeinfo)) { char buf[50]; strftime(buf, sizeof(buf), "%I:%M %p", &timeinfo); timeStr = String(buf); }
+  if (strlen(SERPER_KEY) > 5) {
+      WiFiClientSecure client; client.setInsecure();
+      HTTPClient http;
+      if (http.begin(client, "https://google.serper.dev/search")) {
+        http.addHeader("Content-Type", "application/json");
+        http.addHeader("X-API-KEY", SERPER_KEY);
+        String jsonPayload = "{\"q\":\"" + query + "\"}";
+        int httpCode = http.POST(jsonPayload);
+        if (httpCode == HTTP_CODE_OK) {
+           String response = http.getString();
+           StaticJsonDocument<2048> doc;
+           DeserializationError error = deserializeJson(doc, response);
+           if (!error) {
+               const char* snippet = doc["organic"][0]["snippet"];
+               if (snippet) {
+                   String s = String(snippet);
+                   if (s.length() > 250) s = s.substring(0, 250) + "...";
+                   http.end(); return "Google Search Result: " + s;
+               }
+           }
+        }
+        http.end();
+      }
+      return "Search failed due to network or API error.";
+  }
+  if (query.indexOf("tech") >= 0 || query.indexOf("technology") >= 0) return "My circuits tell me Nigerian tech is booming! Fintech is hot.";
+  else if (query.indexOf("weather") >= 0) return "I can't feel the breeze, but my sensors say it's " + String(temp_aht, 1) + "C here.";
+  else if (query.indexOf("time") >= 0) return "It is exactly " + timeStr;
+  else return "I don't have a search key configured yet. Please add one.";
 }
 
 // ========== Setup ==========
@@ -1259,5 +1389,6 @@ void loop() {
     }
     webSocket.loop();
   }
+  audio.loop();
   delay(10);
 }
