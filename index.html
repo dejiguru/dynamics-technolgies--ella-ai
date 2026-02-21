@@ -53,6 +53,22 @@
             width: 36px;
             height: 36px;
         }
+        .status-indicator {
+            position: fixed;
+            top: 22px;
+            left: 15px;
+            width: 10px;
+            height: 10px;
+            background: #FF3B30;
+            border-radius: 50%;
+            z-index: 200;
+            transition: 0.3s;
+            box-shadow: 0 0 8px rgba(255,59,48,0.5);
+        }
+        .status-connected {
+            background: #34C759;
+            box-shadow: 0 0 12px rgba(52,199,89,0.6);
+        }
         .icon {
             width: 24px;
             height: 24px;
@@ -63,6 +79,7 @@
     </style>
 </head>
 <body class="dark-mode">
+    <div class="status-indicator" id="status"></div>
     <button class="theme-toggle" id="themeToggle">
         <svg class="icon" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="5"></circle>
@@ -87,6 +104,13 @@
         };
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
+
+        // Connection status
+        const statusEl = document.getElementById('status');
+        database.ref('.info/connected').on('value', (snap) => {
+            const connected = snap.val();
+            statusEl.classList.toggle('status-connected', connected);
+        });
 
         // Theme toggle
         const themeToggle = document.getElementById('themeToggle');
