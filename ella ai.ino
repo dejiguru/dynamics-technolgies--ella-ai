@@ -1,5 +1,6 @@
+
 #include <WiFi.h>
-#include <WebSocketsClient.h>
+// WebSocketsClient removed — phone handles STT
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
@@ -29,16 +30,15 @@
 // ============================================================
 const char* ssid = "ella";
 const char* password = "12345678";
-const char* DEEPGRAM_KEY = "983ce7a94c3e617a80f52b74d60212c95a353c01";
+// DEEPGRAM_KEY removed — phone handles STT via Web Speech API
 const char* GROQ_KEY = "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";
 const char* SERPER_KEY = "fea12f5e645599a7ee78aaf7ae2d0dafa74ce92e"; // Get free Google Search key from serper.dev
 
-// Firebase (from sketch_dec5a)
-// Firebase (from sketch_dec5a)
-const char* FIREBASE_HOST = "ella-b927d-default-rtdb.firebaseio.com";
-const char* FIREBASE_DATABASE_URL = "https://ella-b927d-default-rtdb.firebaseio.com"; // Removed trailing slash
-const char* FIREBASE_AUTH = "AIzaSyC_yLxDXOqJMY6WB34vxVHe9JP-457kcvI"; // API Key
-const char* FIREBASE_DB_SECRET = "6p1xNhaN0ZAYJ4Ouy4iKTW3MujgYm8ji71pYzWOZ"; // Database Secret from sketch_dec5a
+// Firebase
+const char* FIREBASE_HOST = "ellacloudai-default-rtdb.firebaseio.com";
+const char* FIREBASE_DATABASE_URL = "https://ellacloudai-default-rtdb.firebaseio.com";
+const char* FIREBASE_AUTH = "AIzaSyAugdbUKoc8HgVfuj1zxmOIujmfN337j6Q";
+const char* FIREBASE_DB_SECRET = "Aj3Sw5IWZfFvDkh1Qb2Jx1QVA3BGG8HXGjlZIIbW";
 
 FirebaseData fbdo;
 FirebaseAuth auth;
@@ -76,9 +76,7 @@ const int daylightOffset_sec = 0;
 #define TFT_SCLK 12
 #define TFT_MISO 13  // XPT2046 touch data line (shared SPI)
 
-// Ultrasonic
-#define US_TRIG_PIN 5  
-#define US_ECHO_PIN 16 
+// Ultrasonic pins removed
 
 #define TACTILE_SWITCH_PIN 38
 #define INTERRUPT_PIN -1 // Disabled (User Request)
@@ -110,7 +108,7 @@ const int SAMPLE_RATE = 16000;
 
 // ============================================================
 // Objects
-WebSocketsClient webSocket;
+// WebSocket removed — phone handles STT via Firebase
 
 // Function Forward Declarations
 void audio_eof_speech(const char* info);
@@ -167,8 +165,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 int16_t* sBuffer = nullptr;
 bool isProcessingAI = false;
 bool isSpeaking = false;
-bool sttConnected = false;
-bool isConnectingSTT = false; // New guard
+// sttConnected/isConnectingSTT removed — phone handles STT
 unsigned long lastMusicAction = 0;
 
 // ============================================================
@@ -195,7 +192,7 @@ float max30102_temp = NAN;
 uint16_t aqi_val = 0;
 uint16_t tvoc_val = 0;
 uint16_t eco2_val = 0;
-float distance_cm = NAN;
+// distance_cm removed — ultrasonic sensor removed
 
 // ============================================================
 // MAX30102 STATE MACHINE (Normal Mode Only)
@@ -230,20 +227,15 @@ String conversationHistory = "";
 // TELEGRAM BOT POLLING
 // ============================================================
 unsigned long lastTelegramCheck = 0;
-// Mode-aware: fast in Normal (no Deepgram SSL), slow in AI (Deepgram shares SSL heap)
-const unsigned long TELEGRAM_INTERVAL_NORMAL = 10000; // 10s — Normal mode
-const unsigned long TELEGRAM_INTERVAL_AI     = 45000; // 45s — AI mode (Deepgram active)
+// Mode-aware Telegram polling
+const unsigned long TELEGRAM_INTERVAL_NORMAL = 10000; // 10s
+const unsigned long TELEGRAM_INTERVAL_AI     = 15000; // 15s
 
 int lastUpdateId = 0;
 
 // ============================================================
 // AUDIO FILTER (High-Pass for DC/Rumble Removal)
-// ============================================================
-// Simple 1st order high-pass filter @ 80Hz (preserves speech 85Hz+)
-// Removes DC offset and low rumble without affecting Deepgram's noise handling
-float hpf_alpha = 0.0;  // Will be calculated in setup
-float hpf_prev_input = 0.0;
-float hpf_prev_output = 0.0;
+// HPF filter globals removed — no Deepgram mic streaming
 
 // ============================================================
 // MULTIPLEXER
@@ -274,8 +266,7 @@ String getRemindersContext();
 void speakText(const char* text);
 void askGroq(const char* userText);
 String getGroqResponse(String systemPrompt, String userText);
-void webSocketEvent(WStype_t type, uint8_t* payload, size_t length);
-void handleSTTResponse(char* json);
+// webSocketEvent and handleSTTResponse removed — phone handles STT
 void playMusic(String query);
 String performWebSearch(String query);
 struct SongResult { String title; String author; String audioUrl; bool found; };
@@ -302,11 +293,7 @@ void setup() {
   delay(1000);
   Serial.println("EllaBox Starting...");
 
-  // Initialize high-pass filter (80Hz cutoff @ 16kHz sample rate)
-  // alpha = 1 / (1 + (sample_rate / (2 * pi * cutoff_freq)))
-  // For 80Hz @ 16kHz: alpha ≈ 0.969
-  float cutoff = 80.0;
-  hpf_alpha = 1.0 / (1.0 + (SAMPLE_RATE / (2.0 * 3.14159 * cutoff)));
+  // HPF filter removed (no Deepgram mic streaming)
   // pinMode(INTERRUPT_PIN, INPUT_PULLUP); // Disabled
   pinMode(TACTILE_SWITCH_PIN, INPUT_PULLUP);
   delay(1000);
@@ -345,10 +332,9 @@ void setup() {
   }
 
   // WiFi
-  // WiFi (Non-Blocking)
+  // WiFi — connection handled in startupSequence()
   WiFi.setSleep(false);
-  WiFi.begin(ssid, password);
-  Serial.println("WiFi Started (Async)...");
+  Serial.println("WiFi will connect in startupSequence()...");
 
 
   // SPIFFS
@@ -452,8 +438,7 @@ void setup() {
     Serial.println("MAX30102 Failed at begin()");
   }
 
-  pinMode(US_TRIG_PIN, OUTPUT);
-  pinMode(US_ECHO_PIN, INPUT);
+  // Ultrasonic pins removed
 
   // Speaker
   audio.setPinout(SPK_BCLK, SPK_LRC, SPK_DOUT);
@@ -471,25 +456,7 @@ void setup() {
   for (int i = 0; i < 2000; i++) mic_i2s.read();
   Serial.println("Mic OK");
 
-  // STT (Deepgram) - Nova-3 optimized for Nigerian accent
-  // STT (Deepgram) - Nova-3 optimized for Nigerian accent
-  // Optimized VAD: endpointing=250ms for faster response (was 500ms)
-  // utterance_end_ms=1000 provides noise-resilient end-of-speech detection
-  // vad_events helps with accent variations in silence detection
-  // diarize + utterances provide better context for accent understanding
-  String url = "/v1/listen?model=nova-3"
-                "&language=en"
-                "&encoding=linear16"
-                "&sample_rate=16000"
-                "&channels=1"
-                "&diarize=true"
-                "&utterances=true"
-                "&punctuate=true"
-                "&smart_format=true"
-                "&endpointing=250"
-                "&utterance_end_ms=1000"
-                "&vad_events=true"
-                "&interim_results=true";
+  // Deepgram URL block removed — phone handles STT
 
   currentMode = MODE_NORMAL;
   setEyeExpression("NORMAL");
@@ -521,9 +488,7 @@ void setup() {
 }
 
 // Global filter variables
-float dc_offset = 0.0;
-const float DC_ALPHA = 0.001; 
-#define GAIN_BOOSTER_I2S 18
+// dc_offset/DC_ALPHA/GAIN_BOOSTER_I2S removed — no Deepgram mic streaming
 bool networkInitialized = false;
 
 // Visual Startup Sequence
@@ -534,13 +499,22 @@ void startupSequence() {
   String wifiSSID = prefs.getString("ssid", "");
   String wifiPass = prefs.getString("pass", "");
   
-  if (wifiSSID.length() > 0) {
+  // Validate saved credentials (reject junk like "false", empty, etc.)
+  bool savedValid = (wifiSSID.length() > 2 && wifiSSID != "false" && wifiSSID != "null");
+  
+  if (savedValid) {
       Serial.println("[WiFi] Connecting to SAVED credentials: " + wifiSSID);
-      WiFi.setSleep(false); // CRITICAL: Disable power save for smooth audio
+      WiFi.setSleep(false);
       WiFi.begin(wifiSSID.c_str(), wifiPass.c_str());
   } else {
+      if (wifiSSID.length() > 0) {
+          // Clear bad saved credentials
+          Serial.println("[WiFi] Clearing invalid saved SSID: " + wifiSSID);
+          prefs.remove("ssid");
+          prefs.remove("pass");
+      }
       Serial.println("[WiFi] Connecting to HARDCODED credentials...");
-      WiFi.setSleep(false); // CRITICAL: Disable power save for smooth audio
+      WiFi.setSleep(false);
       WiFi.begin(ssid, password);
   }
   
@@ -551,12 +525,16 @@ void startupSequence() {
       wifiTimeout++;
   }
   
-  if (WiFi.status() != WL_CONNECTED && wifiSSID.length() > 0) {
+  if (WiFi.status() != WL_CONNECTED && savedValid) {
       Serial.println("\n[WiFi] Saved failed. Trying hardcoded fallback...");
+      WiFi.disconnect(true);  // FIX: Fully disconnect before retry
+      delay(500);
       WiFi.begin(ssid, password);
-      while (WiFi.status() != WL_CONNECTED) {
+      int fallbackTimeout = 0;
+      while (WiFi.status() != WL_CONNECTED && fallbackTimeout < 20) {
           delay(500);
           Serial.print(".");
+          fallbackTimeout++;
       }
   }
 
@@ -599,22 +577,7 @@ void startupSequence() {
 
 
 
-// Helper for Deepgram Connection
-void connectToDeepgram() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  if (sttConnected || isConnectingSTT) return; // Prevent overlapping attempts
-  
-  isConnectingSTT = true;
-  Serial.println("[STT] Starting Deepgram Connection...");
-  
-  String url = "/v1/listen?model=nova-3&language=en&encoding=linear16&sample_rate=16000&channels=1&diarize=true&utterances=true&punctuate=true&smart_format=true&endpointing=250&utterance_end_ms=1000&vad_events=true&interim_results=true";
-  String auth = "Authorization: Token " + String(DEEPGRAM_KEY);
-  webSocket.setExtraHeaders(auth.c_str());
-  webSocket.beginSSL("api.deepgram.com", 443, url.c_str());
-  webSocket.onEvent(webSocketEvent);
-  webSocket.enableHeartbeat(5000, 2000, 2);
-  webSocket.setReconnectInterval(3000); 
-}
+// connectToDeepgram() removed — phone handles STT via Firebase
 
 void setupNetwork() {
   if (WiFi.status() != WL_CONNECTED) return;
@@ -629,9 +592,7 @@ void setupNetwork() {
     Serial.println("[Network] Time Sync pending...");
   }
 
-  // Deepgram SSL
-  // Deepgram SSL
-  connectToDeepgram();
+  // Deepgram removed — phone handles STT
   
   // NTP initialized in startupSequence
   // configTime(3600, 0, "pool.ntp.org", "time.nist.gov");
@@ -694,34 +655,7 @@ void loop() {
 
   audio.loop();
   
-  // WebSocket Loop (Skip during critical measurement to prevent blocking/noise)
-  if (currentMedState != MED_CHECKING && currentMedState != MED_MEASURING) {
-      webSocket.loop();
-  }
-  
-  // Auto-Reconnect Deepgram (ONLY in AI Mode to save Heap in Normal Mode)
-  // FIX: Do NOT reconnect if Audio is playing (Shared I2S/Heap conflict)
-  if (currentMode == MODE_AI && !sttConnected && WiFi.status() == WL_CONNECTED && !audio.isRunning()) {
-      static unsigned long lastReconnectAttempt = 0;
-      if (millis() - lastReconnectAttempt > 10000) { // 10s cooldown
-          Serial.println("[STT] Auto-Reconnect Triggered...");
-          connectToDeepgram();
-          lastReconnectAttempt = millis();
-      }
-  }
-
-  // Connection Guard Safety Timeout (If stuck connecting for > 20s, reset)
-  if (isConnectingSTT) {
-      static unsigned long connectingStart = 0;
-      static bool lastConnecting = false;
-      if (!lastConnecting && isConnectingSTT) connectingStart = millis();
-      lastConnecting = isConnectingSTT;
-
-      if (millis() - connectingStart > 20000) {
-          Serial.println("[STT] Connection Guard Timeout - Resetting");
-          isConnectingSTT = false;
-      }
-  }
+  // WebSocket/Deepgram removed — phone handles STT
   
   // Feed watchdog to prevent resets during long operations
   yield();
@@ -740,11 +674,8 @@ void loop() {
   }
   lastSpeaking = isSpeaking;
     
-    // Keepalive for Deepgram (prevent timeout)
-    // WebSocket handler (for Deepgram STT)
-  // Pause during medical checkups to prevent blocking
+  // Animate eyes in AI mode
   if (currentMode == MODE_AI && currentMedState == MED_IDLE) {
-    webSocket.loop();
     animateEyesWhileSpeaking();
   }
 
@@ -813,31 +744,7 @@ void loop() {
   processTactileSwitch();
   processTouchScreen();
 
-  // Ultrasonic Wake-on-Approach — throttle in AI mode to avoid stutters
-  // getDistance() uses pulseIn() which can block up to 30ms
-  // Debug Flags every 2s
-  static unsigned long lastFlagCheck = 0;
-  if (millis() - lastFlagCheck > 2000) {
-     lastFlagCheck = millis();
-     Serial.printf("[Loop] Speaking:%d Processing:%d Audio:%d\n", isSpeaking, isProcessingAI, audio.isRunning());
-  }
-
-  // Ultrasonic Debug - Force read every 500ms
-  static unsigned long lastUltraRead = 0;
-  if (!isSpeaking && !isProcessingAI && millis() - lastUltraRead > 500) {
-    Serial.println("[Debug] Calling getDistance()..."); 
-    distance_cm = getDistance();
-    lastUltraRead = millis();
-  }
-  if (currentMode == MODE_NORMAL && distance_cm > 0 && distance_cm < 50) {
-    static unsigned long lastAutoWake = 0;
-    if (millis() - lastAutoWake > 60000) { // Only auto-wake once per minute
-      Serial.println("[Ultra] Wake-on-Approach detected!");
-      switchToAIMode();
-      speakText("Hello there! I see you. How can I help you?");
-      lastAutoWake = millis();
-    }
-  }
+  // Ultrasonic wake-on-approach removed
 
   // if (digitalRead(INTERRUPT_PIN) == LOW && audio.isRunning()) {
   //   audio.stopSong(); isSpeaking = isProcessingAI = false;
@@ -855,49 +762,8 @@ void loop() {
 
   // MODE-SPECIFIC LOGIC
   if (currentMode == MODE_AI) {
-    // AI Mode: Audio streaming
-
-
-    if (sttConnected && !isProcessingAI && !isSpeaking) {
-      size_t bytesIn = mic_i2s.readBytes((char*)sBuffer, BUFFER_LEN * sizeof(int16_t));
-      if (bytesIn == 0) {
-        static unsigned long lastZero = 0;
-        if (millis() - lastZero > 5000) { Serial.println("[Audio] Warning: Mic read 0 bytes"); lastZero = millis(); }
-      }
-      if (bytesIn > 0) {
-        int16_t tempSamples[BUFFER_LEN];
-        size_t numSamples = bytesIn / 2;
-        memcpy(tempSamples, sBuffer, numSamples * 2);
-
-        // Apply DC offset removal + gain boost (no HPF)
-        int validSamples = 0;
-        for (int i = 0; i < numSamples; i++) {
-          int16_t sample = tempSamples[i];
-          if (sample != 0 && sample != -1 && sample != 1) {
-            // Remove DC offset to center waveform (prevents clipping)
-            dc_offset = dc_offset * (1.0 - DC_ALPHA) + sample * DC_ALPHA;
-            float centered = sample - dc_offset;
-            
-            // Apply gain
-            int32_t amplified = (int32_t)centered * GAIN_BOOSTER_I2S;
-            if (amplified > 32767) amplified = 32767;
-            else if (amplified < -32768) amplified = -32768;
-            sBuffer[validSamples++] = (int16_t)amplified;
-          }
-        }
-
-        static unsigned long lastPrint = 0;
-        if (millis() - lastPrint > 2000) {
-          long sum = 0;
-          for (int i = 0; i < validSamples; i++) sum += abs(sBuffer[i]);
-          int avg = validSamples > 0 ? sum / validSamples : 0;
-          Serial.printf("[Audio] Mic Active - Avg: %d\n", avg);
-          lastPrint = millis();
-        }
-
-        if (validSamples > 0) webSocket.sendBIN((uint8_t*)sBuffer, validSamples * 2);
-      }
-    }
+    // AI Mode: Idle, waiting for phone STT input via Firebase
+    checkRemoteCommands();
   } else {
     // Normal Mode: AHT/ENS Sensors (slow, every 5s is fine)
     static unsigned long lastSensorRead = 0;
@@ -1206,12 +1072,7 @@ void switchToNormalMode() {
   // 1. Stop Mic FIRST to prevent new data from entering
   mic_i2s.end();
   
-  // 2. Disconnect Deepgram safely
-  if (sttConnected) {
-    Serial.println("[Mode] Disconnecting Deepgram to free heap");
-    webSocket.disconnect();
-    sttConnected = false;
-  }
+  // Deepgram disconnect removed — no more on-device STT
   
   // Restart MAX30102
   tcaselect(CH_MAX);
@@ -1252,9 +1113,8 @@ void switchToAIMode() {
   tft.fillScreen(UI_BG);
   drawAIScreen(true); // Force Initialization
   
-  // Ensure connectivity immediately
-  Serial.println("[Mode] Connecting to Deepgram...");
-  connectToDeepgram();
+  // AI mode ready — waiting for phone STT via Firebase
+  Serial.println("[Mode] AI Mode active, waiting for phone input via Firebase");
 }
 
 
@@ -1268,8 +1128,7 @@ void updateSensors() {
   read_aht20();
   read_ens160();
   
-  // Distance is read in loop or on demand
-  distance_cm = getDistance(); // valid
+  // distance_cm = getDistance() removed \u2014 ultrasonic sensor removed
 
 }
 
@@ -1347,22 +1206,7 @@ void read_max30102() {
    }
 }
 
-float getDistance() {
-  digitalWrite(US_TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(US_TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(US_TRIG_PIN, LOW);
-  long duration = pulseIn(US_ECHO_PIN, HIGH, 5000); // 5ms timeout (~85cm)
-  Serial.printf("[Ultra] Raw duration: %ld us", duration);
-  if (duration == 0) {
-    Serial.println(" -> TIMEOUT (no echo)");
-    return -1;
-  }
-  float dist = duration * 0.034f / 2.0f;
-  Serial.printf(" -> %.1f cm\n", dist);
-  return dist;
-}
+// getDistance() removed — ultrasonic sensor removed
 
 // ============================================================
 // DISPLAY
@@ -2010,20 +1854,20 @@ void drawAIScreen(bool force) {
     tft.setTextColor(UI_INFO);
     tft.setCursor((SCR_W - 13 * 12) / 2, 5);
     tft.print("AI ASSISTANT");
-    drawStatusDot(sttConnected);
+    drawStatusDot(firebaseReady);
     drawNavigationBar();
     initialized = true;
-    lastSttState = sttConnected;
+    lastSttState = firebaseReady;
   }
 
   // ── Status dot: only redraw when connection changes ───────────
-  if (sttConnected != lastSttState) {
-    drawStatusDot(sttConnected);
-    lastSttState = sttConnected;
+  if (firebaseReady != lastSttState) {
+    drawStatusDot(firebaseReady);
+    lastSttState = firebaseReady;
   }
 
   // ── Pulse animation: DELTA-ONLY, no black fill flash ──────────
-  if (sttConnected && !isProcessingAI) {
+  if (firebaseReady && !isProcessingAI) {
     int pulseSize = 30 + (int)((sin(millis() / 200.0) + 1.0) * 3.0); // 30–36px
 
     if (pulseSize != prevPulseSize) {
@@ -2075,8 +1919,8 @@ void drawAIScreen(bool force) {
   // ── Status text: only redraw when it changes ──────────────────
   String status;
   if (isProcessingAI)    status = "Thinking...";
-  else if (sttConnected) status = "Listening...";
-  else                   status = "Connecting...";
+  else if (firebaseReady) status = "Waiting for input...";
+  else                   status = "Not connected";
 
   if (status != lastStatus) {
     tft.fillRect(0, SCR_H / 2 + 30, SCR_W, 40, UI_BG);
@@ -2512,6 +2356,23 @@ void checkRemoteCommands() {
             ESP.restart();
         }
     }
+
+    // 3. Check AI Chat (Phone STT -> Firebase -> ESP32)
+    if (Firebase.RTDB.getString(&fbdo, "/commands/aiChat")) {
+        String msg = fbdo.stringData();
+        if (msg.length() > 1 && msg != "null") {
+            Serial.println("[Command] AI Chat from Web: " + msg);
+            Firebase.RTDB.deleteNode(&fbdo, "/commands/aiChat");
+            if (!isSpeaking && !isProcessingAI) {
+                isProcessingAI = true;
+                playProcessingTone();
+                setEyeExpression("THINKING");
+                if (currentMode != MODE_AI) switchToAIMode();
+                drawAIScreen(false);
+                askGroq(msg.c_str());
+            }
+        }
+    }
 }
 void    pushSensorDataToFirebase() {
   if (!firebaseReady) {
@@ -2703,13 +2564,7 @@ bool sendTelegramMessage(String msg) {
       return false;
   }
 
-  // RESOURCE FIX: Disconnect Deepgram to free SSL context/Heap
-  if (sttConnected) {
-      Serial.println("[Telegram] Pausing Deepgram for Message...");
-      webSocket.disconnect();
-      sttConnected = false;
-      delay(500); // Increased from 200 to 500 for robust SSL cleanup
-  }
+  // Deepgram disconnect removed — no more on-device STT
 
   WiFiClientSecure client;
   client.setInsecure();
@@ -2890,114 +2745,9 @@ String getSensorContext() {
 
 
 // ============================================================
-// WEBSOCKET
+// WEBSOCKET / STT — Removed (phone handles STT via Web Speech API)
 // ============================================================
-void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
-  switch (type) {
-    case WStype_DISCONNECTED:
-      sttConnected = false;
-      isConnectingSTT = false; // Reset guard
-      Serial.println("[Deepgram] Disconnected");
-      if (length > 0) {
-        Serial.printf("[Deepgram] Disconnect reason: %s\n", (char*)payload);
-      }
-      break;
-
-    case WStype_CONNECTED:
-      sttConnected = true;
-      isConnectingSTT = false; // Reset guard
-      Serial.println("[Deepgram] Connected!");
-      setEyeExpression("THINKING");
-      break;
-
-    case WStype_TEXT:
-      handleSTTResponse((char*)payload);
-      break;
-
-    case WStype_BIN:
-      // Deepgram might send binary responses, just log them
-      Serial.printf("[Deepgram] Binary data received (%d bytes)\n", length);
-      break;
-
-    case WStype_ERROR:
-      Serial.printf("[STT] Error: %s\n", (char*)payload);
-      break;
-
-    case WStype_PING:
-      Serial.println("[Deepgram] Ping");
-      break;
-
-    case WStype_PONG:
-      Serial.println("[Deepgram] Pong");
-      break;
-  }
-}
-
-void handleSTTResponse(char* json) {
-  StaticJsonDocument<2048> doc; // Reduced from 4096 to save stack
-  DeserializationError error = deserializeJson(doc, json);
-  
-  if (error) {
-    Serial.printf("[STT] JSON parse error: %s\n", error.c_str());
-    return;
-  }
-
-  // Log message type
-  const char* type = doc["type"];
-  if (type) {
-    Serial.printf("[Deepgram] Message type: %s\n", type);
-    
-    // Check for close/error messages
-    if (strcmp(type, "Close") == 0 || strcmp(type, "close") == 0) {
-      Serial.println("[Deepgram] Received close message from server!");
-      return;
-    }
-    
-    // Clear text ONLY if interrupting AI (Barge-In)
-    if (strcmp(type, "SpeechStarted") == 0) {
-       // Only clear if we are interrupting the AI
-       if (isSpeaking || audio.isRunning()) {
-          Serial.println("[Deepgram] User interrupted AI - Clearing Text");
-          currentInterimText = ""; 
-          drawAIScreen(true); 
-          if (audio.isRunning()) audio.stopSong();
-          isSpeaking = false;
-       } else {
-          Serial.println("[Deepgram] Speech started (Continuing...)");
-       }
-       return;
-    }
-  }
-
-  bool isFinal = doc["is_final"] | false;
-  const char* transcript = doc["channel"]["alternatives"][0]["transcript"];
-
-  if (isFinal && transcript && strlen(transcript) > 0) {
-    String finalTx = String(transcript);
-    finalTx.trim();
-    currentInterimText = finalTx; // Keep final text on screen
-    drawAIScreen(); // Force update
-    
-    Serial.printf("\n[Final]: %s\n", finalTx.c_str());
-    Serial.println("[DEBUG] Setting isProcessingAI = true");
-    isProcessingAI = true;
-    
-    // ACKNOWLEDGE BEEP
-    playProcessingTone();
-    
-    setEyeExpression("THINKING");
-    
-    Serial.println("[DEBUG] Calling askGroq()...");
-    askGroq(transcript);
-    
-  } else if (transcript && strlen(transcript) > 0) {
-    // Interim Result
-    Serial.printf("[Interim]: %s\n", transcript);
-    currentInterimText = String(transcript);
-    drawAIScreen(); // Update screen with live text
-  }
-}
-// drawInterimText removed (integrated into drawAIScreen)
+// webSocketEvent() and handleSTTResponse() removed
 
 // ============================================================
 // GROQ AI
@@ -3006,16 +2756,7 @@ String getGroqResponse(String systemPrompt, String userText) {
   // FIX: Removed blocking delay. Check WiFi status instantly.
   if (WiFi.status() != WL_CONNECTED) return "Error: No WiFi";
 
-  // RESOURCE FIX OPTIMIZATION: Removed forced disconnect.
-  // With PSRAM, we try to keep both SSL connections alive for speed.
-  /*
-  if (sttConnected) {
-      Serial.println("[Groq] Pausing Deepgram for API Request...");
-      webSocket.disconnect();
-      sttConnected = false;
-      delay(200); 
-  }
-  */
+  // Deepgram disconnect removed — no more on-device STT
 
   WiFiClientSecure client;
   client.setInsecure(); // Faster handshake
@@ -3353,10 +3094,7 @@ void playMusic(String genre) {
   isSpeaking = true;
   lastMusicAction = millis();
 
-  if (sttConnected) {
-    webSocket.disconnect();
-    sttConnected = false;
-  }
+  // WebSocket disconnect removed — no more Deepgram
 
   mic_i2s.end();
 
