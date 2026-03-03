@@ -31,15 +31,14 @@
 const char* ssid = "ella";
 const char* password = "12345678";
 // DEEPGRAM_KEY removed — phone handles STT via Web Speech API
-const char* GROQ_KEY = "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";
-const char* SERPER_KEY = "fea12f5e645599a7ee78aaf7ae2d0dafa74ce92e"; // Get free Google Search key from serper.dev
+const char* GROQ_KEY = 
+const char* SERPER_KEY = 
 
 // Firebase
-const char* FIREBASE_HOST = "ellacloudai-default-rtdb.firebaseio.com";
-const char* FIREBASE_DATABASE_URL = "https://ellacloudai-default-rtdb.firebaseio.com";
-const char* FIREBASE_AUTH = "AIzaSyAugdbUKoc8HgVfuj1zxmOIujmfN337j6Q";
-const char* FIREBASE_DB_SECRET = "Aj3Sw5IWZfFvDkh1Qb2Jx1QVA3BGG8HXGjlZIIbW";
-
+const char* FIREBASE_HOST = 
+const char* FIREBASE_DATABASE_URL = "
+const char* FIREBASE_AUTH = ";
+const char* FIREBASE_DB_SECRET = "
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
